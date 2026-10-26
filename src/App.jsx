@@ -602,4 +602,89 @@ export default function App() {
       </section>
 
       {/* --- MAIN CATALOG --- */}
-      <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow
+      <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
+          <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  selectedCategory === cat.id
+                    ? 'text-white shadow-md'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+                style={{ backgroundColor: selectedCategory === cat.id ? siteSettings.primary_color : undefined }}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center space-x-3 self-end md:self-auto">
+            <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer"
+            >
+              <option value="featured">Featured</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="rating">Highest Rated</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Product Grid */}
+        <div className="mt-8">
+          {loading ? (
+            <div className="text-center py-20">
+              <RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color }} />
+              <p className="text-sm opacity-70 font-medium">正在加载商品...</p>
+            </div>
+          ) : displayedProducts.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+              <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-slate-700">No active products found</h3>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+              {displayedProducts.map(product => (
+                <div key={product.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
+                  <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(product)}>
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  </div>
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center space-x-1 text-amber-400 text-xs font-semibold">
+                        <Star className="w-4 h-4 fill-amber-400" />
+                        <span>{product.rating || 5.0}</span>
+                        <span className="text-slate-400">({product.reviews || 0})</span>
+                      </div>
+                      <h3 onClick={() => setSelectedProduct(product)} className="mt-2 text-base font-bold text-slate-800 cursor-pointer line-clamp-1">
+                        {product.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">{product.description}</p>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
+                      <span className="text-lg font-bold text-slate-900">${parseFloat(product.price).toFixed(2)}</span>
+                      <button 
+                        onClick={() => addToCart(product)} 
+                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90"
+                        style={{ backgroundColor: siteSettings.primary_color }}
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
