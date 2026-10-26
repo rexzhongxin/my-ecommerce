@@ -168,27 +168,29 @@ export default function App() {
     }
   };
 
-  // 🌟 关键修复：深拷贝要加入的特定 product 对象，精准比对 id
-  const addToCart = (targetProduct, quantity = 1) => {
-    if (!targetProduct || !targetProduct.id) return;
-    
-    // 拷贝对象避免引用污染
-    const itemToAdd = { ...targetProduct };
+  // 🌟 核心：移除严格拦截，以最稳妥的方式添加任何选中的商品
+  const addToCart = (productToAdd, quantity = 1) => {
+    if (!productToAdd) return;
 
     setCart(prevCart => {
-      const existing = prevCart.find(item => String(item.id) === String(itemToAdd.id));
-      if (existing) {
-        return prevCart.map(item => 
-          String(item.id) === String(itemToAdd.id) 
-            ? { ...item, quantity: item.quantity + quantity } 
-            : item
-        );
+      // 优先比对 id，若无 id 则比对 name
+      const existingIndex = prevCart.findIndex(item => {
+        if (item.id && productToAdd.id) {
+          return String(item.id) === String(productToAdd.id);
+        }
+        return item.name === productToAdd.name;
+      });
+
+      if (existingIndex > -1) {
+        const updatedCart = [...prevCart];
+        updatedCart[existingIndex].quantity += quantity;
+        return updatedCart;
       }
-      return [...prevCart, { ...itemToAdd, quantity }];
+      return [...prevCart, { ...productToAdd, quantity }];
     });
 
     setIsCartOpen(true);
-    showToast(`Added "${itemToAdd.name}" to cart!`);
+    showToast(`Added "${productToAdd.name || 'Product'}" to cart!`);
   };
 
   const updateQuantity = (id, delta) => {
@@ -688,30 +690,30 @@ export default function App() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-              {displayedProducts.map((product) => (
-                <div key={product.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
-                  <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(product)}>
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              {displayedProducts.map((item) => (
+                <div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
+                  <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(item)}>
+                    <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center space-x-1 text-amber-400 text-xs font-semibold">
                         <Star className="w-4 h-4 fill-amber-400" />
-                        <span>{product.rating || 5.0}</span>
-                        <span className="text-slate-400">({product.reviews || 0})</span>
+                        <span>{item.rating || 5.0}</span>
+                        <span className="text-slate-400">({item.reviews || 0})</span>
                       </div>
                       <h3 
-                        onClick={() => setSelectedProduct(product)} 
+                        onClick={() => setSelectedProduct(item)} 
                         className="mt-2 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
                         style={{ color: siteSettings.text_color }}
                       >
-                        {product.name}
+                        {item.name}
                       </h3>
                       <p 
                         className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
                         style={{ color: siteSettings.text_color }}
                       >
-                        {product.description}
+                        {item.description}
                       </p>
                     </div>
 
@@ -720,15 +722,14 @@ export default function App() {
                         className="text-lg font-bold"
                         style={{ color: siteSettings.text_color }}
                       >
-                        ${parseFloat(product.price).toFixed(2)}
+                        ${parseFloat(item.price).toFixed(2)}
                       </span>
 
-                      {/* 🌟 核心：准确传递当前的 product 参数 */}
                       <button 
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          addToCart(product);
+                          addToCart(item);
                         }} 
                         className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
                         style={{ backgroundColor: siteSettings.primary_color }}
@@ -766,7 +767,7 @@ export default function App() {
                 <p className="text-center py-16 text-slate-500">Your cart is empty</p>
               ) : (
                 cart.map(item => (
-                  <div key={item.id} className="py-4 flex items-center space-x-4">
+                  <div key={item.id || item.name} className="py-4 flex items-center space-x-4">
                     <img src={item.image} alt={item.name || ''} className="w-16 h-16 object-cover rounded-xl border border-slate-100" />
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-semibold break-words">{item.name}</h4>
