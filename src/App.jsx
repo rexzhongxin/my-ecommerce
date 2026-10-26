@@ -64,7 +64,7 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('popular'); // 默认按最高销量排序
+  const [sortBy, setSortBy] = useState('featured'); // 🌟 恢复 featured 为默认基础选项
   
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -237,7 +237,6 @@ export default function App() {
   const cartTotal = cartSubtotal + shippingCost + taxCost;
   const totalCartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // 🌟 排序逻辑更新：包含 popular (最高销量)
   const displayedProducts = useMemo(() => {
     return products
       .filter(p => {
@@ -248,7 +247,7 @@ export default function App() {
         return isActive && matchesCategory && matchesSearch;
       })
       .sort((a, b) => {
-        if (sortBy === 'popular') return (b.sales_count || 0) - (a.sales_count || 0); // 销量最高排序
+        if (sortBy === 'popular') return (b.sales_count || 0) - (a.sales_count || 0);
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
         if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
@@ -667,7 +666,7 @@ export default function App() {
             ))}
           </div>
 
-          {/* 🌟 核心修改：筛选增加 Most Popular (热销/最多人买) */}
+          {/* 🌟 核心修改：Featured 作为第一项（默认基础选项） */}
           <div className="flex items-center space-x-3 self-end md:self-auto">
             <SlidersHorizontal className="w-4 h-4 text-slate-500" />
             <select
@@ -675,8 +674,8 @@ export default function App() {
               onChange={(e) => setSortBy(e.target.value)}
               className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
             >
-              <option value="popular">🔥 Most Popular (最多人买)</option>
               <option value="featured">Featured (精选推荐)</option>
+              <option value="popular">🔥 Most Popular (最多人买)</option>
               <option value="price-low">Price: Low to High (价格低到高)</option>
               <option value="price-high">Price: High to Low (价格高到低)</option>
               <option value="rating">Highest Rated (评分最高)</option>
@@ -721,7 +720,7 @@ export default function App() {
                           <span className="text-slate-400">({item.reviews || 0})</span>
                         </div>
 
-                        {/* 🌟 核心：显示销量 */}
+                        {/* 显示销量 */}
                         <span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
                           {item.sales_count || 0} 已售出
                         </span>
