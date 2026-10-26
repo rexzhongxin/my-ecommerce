@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
 import { 
@@ -127,16 +127,16 @@ export default function App() {
 
     setSavingSettings(false);
     if (!error) {
-      showToast('é…è‰²ä¸Žè®¾ç½®å·²æˆåŠŸå†™å…¥æ•°æ®åº“ï¼');
+      showToast('配色与设置已成功写入数据库！');
     } else {
-      showToast('ä¿å­˜å¤±è´¥ï¼š' + error.message);
+      showToast('保存失败：' + error.message);
     }
   };
 
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.price || !newProduct.image) {
-      showToast('è¯·å®Œæ•´å¡«å†™å•†å“ä¿¡æ¯ï¼');
+      showToast('请完整填写商品信息！');
       return;
     }
 
@@ -152,18 +152,18 @@ export default function App() {
     }]);
 
     if (!error) {
-      showToast(`å•†å“ "${newProduct.name}" å‘å¸ƒæˆåŠŸï¼`);
+      showToast(`商品 "${newProduct.name}" 发布成功！`);
       setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true });
       fetchProducts(); 
     } else {
-      showToast('å‘å¸ƒå¤±è´¥ï¼š' + error.message);
+      showToast('发布失败：' + error.message);
     }
   };
 
   const toggleProductActive = async (id, currentStatus) => {
     const { error } = await supabase.from('products').update({ is_active: !currentStatus }).eq('id', id);
     if (!error) {
-      showToast(!currentStatus ? 'å•†å“å·²ä¸Šæž¶ï¼' : 'å•†å“å·²ä¸‹æž¶ï¼');
+      showToast(!currentStatus ? '商品已上架！' : '商品已下架！');
       fetchProducts();
     }
   };
@@ -215,7 +215,7 @@ export default function App() {
       setCheckoutStep('success');
       setCart([]);
     } else {
-      showToast('æäº¤å¤±è´¥ï¼š' + (error ? error.message : 'æœªçŸ¥é”™è¯¯'));
+      showToast('提交失败：' + (error ? error.message : '未知错误'));
       setCheckoutStep(null);
     }
   };
@@ -244,17 +244,16 @@ export default function App() {
   }, [products, selectedCategory, searchQuery, sortBy]);
 
   const whatsappUrl = useMemo(() => {
-    const text = `Hi! æˆ‘æƒ³è®¢è´­ ${siteSettings.store_name} çš„å•†å“ã€‚%0Aè®¢å•å·: #${lastPlacedOrderId || 'NEW'}%0Aå§“å: ${shippingInfo.fullName}%0Aåœ°å€: ${shippingInfo.address}%0Aé¢„ä¼°é‡‘é¢: $${cartTotal.toFixed(2)}`;
-    return `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
+    const rawText = `Hi! 我想订购 ${siteSettings.store_name} 的商品。\n订单号: #${lastPlacedOrderId || 'NEW'}\n姓名: ${shippingInfo.fullName}\n地址: ${shippingInfo.address}\n预估金额: $${cartTotal.toFixed(2)}`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(rawText)}`;
   }, [siteSettings.store_name, lastPlacedOrderId, shippingInfo, cartTotal]);
 
-  // æ‰“å¼€è´­ç‰©è½¦çš„é€šç”¨è§¦å‘å™¨ï¼ˆå« Debug æŽ§åˆ¶å°æ‰“å°ï¼‰
   const openCartDrawer = () => {
     console.log('>>> Direct Open Cart Triggered <<<');
     setIsCartOpen(true);
   };
 
-  // ==================== å•†å®¶ç®¡ç†åŽå°ç•Œé¢ (Admin Backstage) ====================
+  // ==================== 商家管理后台界面 (Admin Backstage) ====================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-6 md:p-10">
@@ -263,9 +262,9 @@ export default function App() {
             <div>
               <div className="flex items-center space-x-2 text-indigo-600 font-bold">
                 <LayoutDashboard className="w-6 h-6" />
-                <span className="text-xl">{siteSettings.store_name} å•†å®¶ç®¡ç†åŽå°</span>
+                <span className="text-xl">{siteSettings.store_name} 商家管理后台</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">äº‘ç«¯å®žæ—¶æ•°æ®æŽ§åˆ¶ä¸­å¿ƒ (Supabase Enterprise Managed)</p>
+              <p className="text-xs text-slate-500 mt-1">云端实时数据控制中心 (Supabase Enterprise Managed)</p>
             </div>
             
             <button
@@ -273,18 +272,18 @@ export default function App() {
               className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow transition-all self-start md:self-auto"
             >
               <Store className="w-4 h-4" />
-              <span>è¿”å›žç½‘åº—å‰å°</span>
+              <span>返回网店前台</span>
             </button>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-indigo-600" /> åº—é¢å“ç‰Œä¸Žæ–‡æœ¬é…ç½®
+              <Settings className="w-5 h-5 text-indigo-600" /> 店面品牌与文本配置
             </h2>
             <form onSubmit={handleSaveSettings} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">åº—é“ºåç§° (Store Name)</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">店铺名称 (Store Name)</label>
                   <input
                     type="text"
                     value={siteSettings.store_name}
@@ -293,7 +292,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">åº—é“º Logo ç½‘å€ (URL)</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">店铺 Logo 网址 (URL)</label>
                   <input
                     type="text"
                     placeholder="https://..."
@@ -303,7 +302,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">é¦–é¡µå¤§æ ‡é¢˜ (Hero Title)</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">首页大标题 (Hero Title)</label>
                   <input
                     type="text"
                     value={siteSettings.hero_title}
@@ -312,7 +311,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">é¦–é¡µå‰¯æ ‡é¢˜ (Hero Subtitle)</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">首页副标题 (Hero Subtitle)</label>
                   <input
                     type="text"
                     value={siteSettings.hero_subtitle}
@@ -329,7 +328,7 @@ export default function App() {
                   className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow transition-all"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{savingSettings ? 'ä¿å­˜ä¸­...' : 'ä¿å­˜ä¿®æ”¹'}</span>
+                  <span>{savingSettings ? '保存中...' : '保存修改'}</span>
                 </button>
               </div>
             </form>
@@ -338,20 +337,20 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
               <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-600" /> å‘å¸ƒæ–°å•†å“
+                <Plus className="w-5 h-5 text-indigo-600" /> 发布新商品
               </h2>
               <form onSubmit={handleCreateProduct} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">å•†å“åç§°</label>
-                  <input type="text" placeholder="å¦‚: Sony WH-1000XM5" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">商品名称</label>
+                  <input type="text" placeholder="如: Sony WH-1000XM5" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">ä»·æ ¼ ($)</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">价格 ($)</label>
                     <input type="number" step="0.01" placeholder="299.00" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">åˆ†ç±»</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">分类</label>
                     <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
                       <option value="Electronics">Electronics</option>
                       <option value="Footwear">Footwear</option>
@@ -361,14 +360,14 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">å›¾ç‰‡é“¾æŽ¥ (URL)</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">图片链接 (URL)</label>
                   <input type="text" placeholder="https://..." value={newProduct.image} onChange={e => setNewProduct({...newProduct, image: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">è¯¦ç»†æè¿°</label>
-                  <textarea rows="3" placeholder="æè¿°å•†å“äº®ç‚¹..." value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">详细描述</label>
+                  <textarea rows="3" placeholder="描述商品亮点..." value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md text-sm">ä¿å­˜å¹¶ä¸Šæž¶</button>
+                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md text-sm">保存并上架</button>
               </form>
             </div>
 
@@ -376,10 +375,10 @@ export default function App() {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-indigo-600" /> ä»“åº“å•†å“ç®¡ç† ({products.length})
+                    <Package className="w-5 h-5 text-indigo-600" /> 仓库商品管理 ({products.length})
                   </h2>
                   <button onClick={fetchProducts} className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3" /> åˆ·æ–°æ•°æ®
+                    <RefreshCw className="w-3 h-3" /> 刷新数据
                   </button>
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto pr-2">
@@ -393,7 +392,7 @@ export default function App() {
                         </div>
                       </div>
                       <button onClick={() => toggleProductActive(p.id, p.is_active)} className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${p.is_active !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
-                        {p.is_active !== false ? (<><span>å·²ä¸Šæž¶</span> <ToggleRight className="w-4 h-4 text-emerald-600" /></>) : (<><span>å·²ä¸‹æž¶</span> <ToggleLeft className="w-4 h-4 text-rose-400" /></>)}
+                        {p.is_active !== false ? (<><span>已上架</span> <ToggleRight className="w-4 h-4 text-emerald-600" /></>) : (<><span>已下架</span> <ToggleLeft className="w-4 h-4 text-rose-400" /></>)}
                       </button>
                     </div>
                   ))}
@@ -403,20 +402,20 @@ export default function App() {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-indigo-600" /> é¡¾å®¢æ„å‘è®¢å•ä¸­å¿ƒ ({orders.length})
+                    <ShoppingBag className="w-5 h-5 text-indigo-600" /> 顾客意向订单中心 ({orders.length})
                   </h2>
-                  <button onClick={fetchOrders} className="text-xs text-indigo-600 hover:underline flex items-center gap-1"><RefreshCw className="w-3 h-3" /> é‡æ–°åŠ è½½è®¢å•</button>
+                  <button onClick={fetchOrders} className="text-xs text-indigo-600 hover:underline flex items-center gap-1"><RefreshCw className="w-3 h-3" /> 重新加载订单</button>
                 </div>
                 <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                  {orders.length === 0 ? (<p className="text-xs text-slate-400 text-center py-6">æš‚æ— è®¢å•æ•°æ®ã€‚</p>) : (
+                  {orders.length === 0 ? (<p className="text-xs text-slate-400 text-center py-6">暂无订单数据。</p>) : (
                     orders.map(o => (
                       <div key={o.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
                         <div className="flex justify-between font-bold text-slate-800">
-                          <span>è®¢å•å·: #{o.id}</span>
+                          <span>订单号: #{o.id}</span>
                           <span className="text-indigo-600">${o.total_price?.toFixed(2)}</span>
                         </div>
-                        <p><span className="text-slate-500">é¡¾å®¢:</span> {o.customer_name} ({o.email})</p>
-                        <p><span className="text-slate-500">é€è´§åœ°å€:</span> {o.address}</p>
+                        <p><span className="text-slate-500">顾客:</span> {o.customer_name} ({o.email})</p>
+                        <p><span className="text-slate-500">送货地址:</span> {o.address}</p>
                       </div>
                     ))
                   )}
@@ -429,7 +428,7 @@ export default function App() {
     );
   }
 
-  // ==================== å‰å°ç½‘åº—ç•Œé¢ (Public Store View) ====================
+  // ==================== 前台网店界面 (Public Store View) ====================
   return (
     <div 
       className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
@@ -444,17 +443,17 @@ export default function App() {
         </div>
       )}
 
-      {/* ðŸŒŸ é¡µé¢å³ä¸‹è§’é¢å¤–å¼ºè¡Œæ”¾ç½®ä¸€ä¸ªå…¨å±€ã€æ‚¬æµ®è´­ç‰©è½¦æŒ‰é’®ã€‘ï¼Œç»å¯¹ä¸ä¼šè¢«ä»»ä½•åœ°æ–¹æ‹¦æˆªï¼ */}
+      {/* 页面右下角全局【悬浮购物车按钮】 */}
       <button
         type="button"
         onClick={openCartDrawer}
-        className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all"
+        className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all cursor-pointer"
       >
         <ShoppingCart className="w-6 h-6 text-indigo-400" />
-        <span className="text-xs font-bold">æŸ¥çœ‹è´­ç‰©è½¦ ({totalCartItemsCount})</span>
+        <span className="text-xs font-bold">查看购物车 ({totalCartItemsCount})</span>
       </button>
 
-      {/* Admin ä¸“å±žå‰å°â€œå®žæ—¶è°ƒè‰²â€æ‚¬æµ®å¡ç‰‡ */}
+      {/* Admin 专属前台“实时调色”悬浮卡片 */}
       {isAdminEnvironment && (
         <div className="fixed bottom-24 right-6 z-50">
           {!showColorPicker ? (
@@ -463,13 +462,13 @@ export default function App() {
               className="flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs hover:bg-slate-800 border border-slate-700 transition-all hover:scale-105"
             >
               <Palette className="w-4 h-4 text-indigo-400" />
-              <span>å®žæ—¶è°ƒè‰²æ¿</span>
+              <span>实时调色板</span>
             </button>
           ) : (
             <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-slate-200 w-72 text-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between border-b pb-2">
                 <span className="text-xs font-bold flex items-center gap-1 text-indigo-600">
-                  <Palette className="w-4 h-4" /> å®žæ—¶å‰å°è°ƒè‰²
+                  <Palette className="w-4 h-4" /> 实时前台调色
                 </span>
                 <button onClick={() => setShowColorPicker(false)} className="text-slate-400 hover:text-slate-600">
                   <X className="w-4 h-4" />
@@ -478,7 +477,7 @@ export default function App() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">ä¸»è‰²è°ƒ (Primary)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">主色调 (Primary)</label>
                   <div className="flex items-center space-x-2">
                     <input 
                       type="color" 
@@ -496,7 +495,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">æ–‡å­—é¢œè‰² (Text)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">文字颜色 (Text)</label>
                   <div className="flex items-center space-x-2">
                     <input 
                       type="color" 
@@ -514,7 +513,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">ç½‘é¡µèƒŒæ™¯è‰² (Background)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">网页背景色 (Background)</label>
                   <div className="flex items-center space-x-2">
                     <input 
                       type="color" 
@@ -538,7 +537,7 @@ export default function App() {
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-1"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>{savingSettings ? 'ä¿å­˜ä¸­...' : 'ä¿å­˜å…¨æ–°é…è‰²'}</span>
+                <span>{savingSettings ? '保存中...' : '保存全新配色'}</span>
               </button>
             </div>
           )}
@@ -585,11 +584,11 @@ export default function App() {
                   className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
                 >
                   <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>å•†å®¶åŽå°</span>
+                  <span>商家后台</span>
                 </button>
               )}
 
-              {/* ðŸŒŸ æžç®€å…¨å…¼å®¹ Header Cart æŒ‰é’® */}
+              {/* Header Cart 按钮 */}
               <button
                 type="button"
                 onClick={openCartDrawer}
@@ -672,7 +671,7 @@ export default function App() {
           {loading ? (
             <div className="text-center py-20">
               <RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color }} />
-              <p className="text-sm opacity-70 font-medium">æ­£åœ¨åŠ è½½å•†å“...</p>
+              <p className="text-sm opacity-70 font-medium">正在加载商品...</p>
             </div>
           ) : displayedProducts.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
@@ -733,7 +732,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Shopping cart rendered through a portal to avoid parent stacking/overflow issues */}
+      {/* Shopping cart rendered through a portal */}
       {isCartOpen && createPortal(
         <div className="fixed inset-0 z-[999999] overflow-hidden" role="dialog" aria-modal="true" aria-label="Shopping cart">
           <button
@@ -805,7 +804,7 @@ export default function App() {
         document.body
       )}
 
-      {/* ðŸŒŸ ç¤¾äº¤åª’ä½“å¼•æµç»“è´¦å¼¹çª— */}
+      {/* 社交媒体引流结账弹窗 */}
       {checkoutStep && (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative">
@@ -813,19 +812,19 @@ export default function App() {
 
             {checkoutStep === 'shipping' && (
               <form onSubmit={handleOrderSubmit} className="space-y-4">
-                <h2 className="text-xl font-bold">è®¢è´­ä¸Žé€è´§èµ„æ–™</h2>
-                <p className="text-xs text-slate-500">å¡«å†™æ‚¨çš„é€è´§èµ„æ–™åŽï¼Œç³»ç»Ÿå°†ä¸ºæ‚¨ç”Ÿæˆè®¢å•é“¾æŽ¥ç›´æŽ¥è”ç³»å–å®¶ç¡®è®¤ã€‚</p>
-                <input required placeholder="æ‚¨çš„å§“å (Full Name)" value={shippingInfo.fullName} onChange={e => setShippingInfo({...shippingInfo, fullName: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
-                <input required placeholder="ç”µé‚®åœ°å€ (Email)" type="email" value={shippingInfo.email} onChange={e => setShippingInfo({...shippingInfo, email: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
-                <input required placeholder="æ”¶è´§åœ°å€ (Street Address)" value={shippingInfo.address} onChange={e => setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                <h2 className="text-xl font-bold">订购与送货资料</h2>
+                <p className="text-xs text-slate-500">填写您的送货资料后，系统将为您生成订单链接直接联系卖家确认。</p>
+                <input required placeholder="您的姓名 (Full Name)" value={shippingInfo.fullName} onChange={e => setShippingInfo({...shippingInfo, fullName: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                <input required placeholder="电邮地址 (Email)" type="email" value={shippingInfo.email} onChange={e => setShippingInfo({...shippingInfo, email: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                <input required placeholder="收货地址 (Street Address)" value={shippingInfo.address} onChange={e => setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 
                 <div className="grid grid-cols-2 gap-3">
-                  <input required placeholder="åŸŽå¸‚ (City)" value={shippingInfo.city} onChange={e => setShippingInfo({...shippingInfo, city: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
-                  <input required placeholder="é‚®ç¼– (Zip)" value={shippingInfo.zipCode} onChange={e => setShippingInfo({...shippingInfo, zipCode: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  <input required placeholder="城市 (City)" value={shippingInfo.city} onChange={e => setShippingInfo({...shippingInfo, city: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  <input required placeholder="邮编 (Zip)" value={shippingInfo.zipCode} onChange={e => setShippingInfo({...shippingInfo, zipCode: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
 
                 <button type="submit" className="w-full text-white font-bold py-3.5 rounded-xl transition-all hover:opacity-90 shadow-md" style={{ backgroundColor: siteSettings.primary_color }}>
-                  ç¡®è®¤æäº¤è®¢å•å¹¶è”ç³»å–å®¶
+                  确认提交订单并联系卖家
                 </button>
               </form>
             )}
@@ -833,7 +832,7 @@ export default function App() {
             {checkoutStep === 'processing' && (
               <div className="text-center py-12 space-y-3">
                 <RefreshCw className="w-10 h-10 animate-spin mx-auto" style={{ color: siteSettings.primary_color }} />
-                <p className="font-bold">æ­£åœ¨ä¿å­˜æ„å‘è®¢å•ä¿¡æ¯...</p>
+                <p className="font-bold">正在保存意向订单信息...</p>
               </div>
             )}
 
@@ -842,9 +841,9 @@ export default function App() {
                 <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
                 
                 <div className="space-y-2">
-                  <h2 className="text-xl font-extrabold text-slate-900">å¦‚éœ€è®¢è´­ï¼Œè¯·ç‚¹å‡»ä»¥ä¸‹é“¾æŽ¥è”ç³»å–å®¶ (WhatsApp / Instagram DM)</h2>
+                  <h2 className="text-xl font-extrabold text-slate-900">如需订购，请点击以下链接联系卖家 (WhatsApp / Instagram DM)</h2>
                   <p className="text-xs text-slate-500">
-                    æ‚¨çš„æ„å‘è®¢å•ç¼–å·ä¸º <span className="font-bold text-slate-800">#{lastPlacedOrderId}</span>ï¼Œç‚¹å‡»ä¸‹æ–¹æŒ‰é’®å°†ç›´æŽ¥å¸¦æ‚¨è·³è½¬è‡³å¯¹åº”çš„èŠå¤©ç•Œé¢å®Œæˆè´­ä¹°ï¼
+                    您的意向订单编号为 <span className="font-bold text-slate-800">#{lastPlacedOrderId}</span>，点击下方按钮将直接带您跳转至对应的聊天界面完成购买！
                   </p>
                 </div>
 
@@ -856,7 +855,7 @@ export default function App() {
                     className="w-full flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all"
                   >
                     <MessageCircle className="w-5 h-5 fill-white" />
-                    <span>é€šè¿‡ WhatsApp ç›´æŽ¥å‘é€è®¢å•</span>
+                    <span>通过 WhatsApp 直接发送订单</span>
                   </a>
 
                   <a
@@ -866,7 +865,7 @@ export default function App() {
                     className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all"
                   >
                     <MessageCircle className="w-5 h-5" />
-                    <span>é€šè¿‡ Instagram ç§ä¿¡ (DM) è”ç³»</span>
+                    <span>通过 Instagram 私信 (DM) 联系</span>
                   </a>
                 </div>
 
@@ -874,7 +873,7 @@ export default function App() {
                   onClick={() => setCheckoutStep(null)} 
                   className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl text-xs transition-all mt-3"
                 >
-                  ç»§ç»­æµè§ˆç½‘åº—
+                  继续浏览网店
                 </button>
               </div>
             )}
@@ -884,4 +883,3 @@ export default function App() {
     </div>
   );
 }
-
