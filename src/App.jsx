@@ -93,16 +93,17 @@ const PRODUCTS = [
     price: 49.90,
     rating: 5.0,
     reviews: 12,
-    image: "/my-product.jpg", // 👈 这是放在 public/my-product.jpg 的本地图片示例
+    image: "/my-product.jpg",
     description: "这是直接读取项目 public 文件夹内部图片的写法示例。"
   }
 ];
+
 const CATEGORIES = [
   { id: 'all', name: 'All Products' },
-  { id: 'electronics', name: 'Electronics' },
-  { id: 'fashion', name: 'Fashion' },
-  { id: 'home', name: 'Home & Living' },
-  { id: 'beauty', name: 'Beauty & Wellness' }
+  { id: 'Electronics', name: 'Electronics' },
+  { id: 'Footwear', name: 'Footwear' },
+  { id: 'Accessories', name: 'Accessories' },
+  { id: 'Lifestyle', name: 'Lifestyle' }
 ];
 
 export default function App() {
@@ -117,7 +118,7 @@ export default function App() {
   const [wishlist, setWishlist] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [checkoutStep, setCheckoutStep] = useState(null); // null, 'shipping', 'payment', 'success'
+  const [checkoutStep, setCheckoutStep] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Form State
@@ -209,7 +210,7 @@ export default function App() {
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
         if (sortBy === 'rating') return b.rating - a.rating;
-        return 0; // featured default
+        return 0;
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
@@ -268,7 +269,6 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-4">
-              {/* Wishlist Icon */}
               <button 
                 onClick={() => showToast(`Wishlist has ${wishlist.length} item(s)`)}
                 className="relative p-2.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
@@ -282,7 +282,6 @@ export default function App() {
                 )}
               </button>
 
-              {/* Cart Icon */}
               <button
                 onClick={() => setIsCartOpen(true)}
                 className="relative flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-full shadow-md shadow-indigo-200 transition-all"
@@ -337,7 +336,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Featured Cards Visual */}
           <div className="mt-10 md:mt-0 flex gap-4 overflow-hidden py-4 opacity-90 hidden lg:flex">
             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 w-48 shadow-2xl transform -rotate-3 hover:rotate-0 transition-all">
               <img src={PRODUCTS[0].image} alt="Headphones" className="h-32 w-full object-cover rounded-xl" />
@@ -355,11 +353,7 @@ export default function App() {
 
       {/* --- MAIN CONTENT / CATALOG --- */}
       <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
-        
-        {/* Category Pills & Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200">
-          
-          {/* Categories */}
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {CATEGORIES.map(cat => (
               <button
@@ -376,7 +370,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Sorting */}
           <div className="flex items-center space-x-3 self-end md:self-auto">
             <SlidersHorizontal className="w-4 h-4 text-slate-500" />
             <span className="text-sm text-slate-500 font-medium">Sort by:</span>
@@ -416,13 +409,6 @@ export default function App() {
                     key={product.id}
                     className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative"
                   >
-                    {/* Badge */}
-                    {product.isNew && (
-                      <span className="absolute top-3 left-3 z-10 bg-indigo-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
-                        NEW
-                      </span>
-                    )}
-
                     {/* Wishlist Button */}
                     <button
                       onClick={() => toggleWishlist(product)}
@@ -451,7 +437,7 @@ export default function App() {
                         <div className="flex items-center space-x-1 text-amber-400 text-xs font-semibold">
                           <Star className="w-4 h-4 fill-amber-400" />
                           <span>{product.rating}</span>
-                          <span className="text-slate-400">({product.reviewsCount})</span>
+                          <span className="text-slate-400">({product.reviews})</span>
                         </div>
                         <h3 
                           onClick={() => setSelectedProduct(product)}
@@ -468,11 +454,6 @@ export default function App() {
                       <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
                         <div>
                           <span className="text-lg font-bold text-slate-900">${product.price.toFixed(2)}</span>
-                          {product.originalPrice && (
-                            <span className="ml-2 text-xs text-slate-400 line-through">
-                              ${product.originalPrice.toFixed(2)}
-                            </span>
-                          )}
                         </div>
 
                         <button
@@ -520,15 +501,12 @@ export default function App() {
                     ))}
                   </div>
                   <span className="text-xs text-slate-500 font-medium">
-                    {selectedProduct.rating} ({selectedProduct.reviewsCount} reviews)
+                    {selectedProduct.rating} ({selectedProduct.reviews} reviews)
                   </span>
                 </div>
 
                 <div className="mt-4 flex items-baseline space-x-3">
                   <span className="text-2xl font-bold text-slate-900">${selectedProduct.price.toFixed(2)}</span>
-                  {selectedProduct.originalPrice && (
-                    <span className="text-sm text-slate-400 line-through">${selectedProduct.originalPrice.toFixed(2)}</span>
-                  )}
                 </div>
 
                 <p className="mt-4 text-sm text-slate-600 leading-relaxed">
@@ -565,7 +543,6 @@ export default function App() {
       {/* --- SLIDE-OVER CART DRAWER --- */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
-          {/* Backdrop */}
           <div 
             onClick={() => setIsCartOpen(false)} 
             className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" 
@@ -574,7 +551,6 @@ export default function App() {
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
               
-              {/* Header */}
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center space-x-2">
                   <ShoppingCart className="w-5 h-5 text-indigo-600" />
@@ -591,7 +567,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Items List */}
               <div className="flex-1 overflow-y-auto p-6 divide-y divide-slate-100">
                 {cart.length === 0 ? (
                   <div className="text-center py-16">
@@ -612,7 +587,6 @@ export default function App() {
                         <h4 className="text-sm font-semibold text-slate-800 line-clamp-1">{item.name}</h4>
                         <p className="text-xs font-bold text-indigo-600 mt-0.5">${item.price.toFixed(2)}</p>
                         
-                        {/* Quantity Controls */}
                         <div className="flex items-center space-x-2 mt-2">
                           <button
                             onClick={() => updateQuantity(item.id, -1)}
@@ -641,7 +615,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Footer Summary */}
               {cart.length > 0 && (
                 <div className="p-6 border-t border-slate-100 bg-slate-50 space-y-3">
                   <div className="flex justify-between text-sm text-slate-600">
@@ -903,10 +876,10 @@ export default function App() {
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">Shop Categories</h4>
             <ul className="space-y-2 text-xs">
-              <li><a href="#shop" onClick={() => setSelectedCategory('electronics')} className="hover:text-white transition-colors">Electronics</a></li>
-              <li><a href="#shop" onClick={() => setSelectedCategory('fashion')} className="hover:text-white transition-colors">Fashion Apparel</a></li>
-              <li><a href="#shop" onClick={() => setSelectedCategory('home')} className="hover:text-white transition-colors">Home & Living</a></li>
-              <li><a href="#shop" onClick={() => setSelectedCategory('beauty')} className="hover:text-white transition-colors">Beauty & Skincare</a></li>
+              <li><a href="#shop" onClick={() => setSelectedCategory('Electronics')} className="hover:text-white transition-colors">Electronics</a></li>
+              <li><a href="#shop" onClick={() => setSelectedCategory('Footwear')} className="hover:text-white transition-colors">Footwear</a></li>
+              <li><a href="#shop" onClick={() => setSelectedCategory('Accessories')} className="hover:text-white transition-colors">Accessories</a></li>
+              <li><a href="#shop" onClick={() => setSelectedCategory('Lifestyle')} className="hover:text-white transition-colors">Lifestyle</a></li>
             </ul>
           </div>
           <div>
