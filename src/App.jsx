@@ -169,6 +169,7 @@ export default function App() {
   };
 
   const addToCart = (product, quantity = 1) => {
+    console.log('--- Add To Cart Action Triggered ---');
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
       if (existing) {
@@ -246,6 +247,12 @@ export default function App() {
     const text = `Hi! 我想订购 ${siteSettings.store_name} 的商品。%0A订单号: #${lastPlacedOrderId || 'NEW'}%0A姓名: ${shippingInfo.fullName}%0A地址: ${shippingInfo.address}%0A预估金额: $${cartTotal.toFixed(2)}`;
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
   }, [siteSettings.store_name, lastPlacedOrderId, shippingInfo, cartTotal]);
+
+  // 打开购物车的通用触发器（含 Debug 控制台打印）
+  const openCartDrawer = () => {
+    console.log('>>> Direct Open Cart Triggered <<<');
+    setIsCartOpen(true);
+  };
 
   // ==================== 商家管理后台界面 (Admin Backstage) ====================
   if (isAdmin) {
@@ -437,9 +444,19 @@ export default function App() {
         </div>
       )}
 
+      {/* 🌟 页面右下角额外强行放置一个全局【悬浮购物车按钮】，绝对不会被任何地方拦截！ */}
+      <button
+        type="button"
+        onClick={openCartDrawer}
+        className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all"
+      >
+        <ShoppingCart className="w-6 h-6 text-indigo-400" />
+        <span className="text-xs font-bold">查看购物车 ({totalCartItemsCount})</span>
+      </button>
+
       {/* Admin 专属前台“实时调色”悬浮卡片 */}
       {isAdminEnvironment && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-24 right-6 z-50">
           {!showColorPicker ? (
             <button
               onClick={() => setShowColorPicker(true)}
@@ -528,7 +545,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- NAVBAR (提升层级至 z-50 确保绝对可点击) --- */}
+      {/* --- NAVBAR --- */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
@@ -560,7 +577,7 @@ export default function App() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center space-x-3 relative z-50">
+            <div className="flex items-center space-x-3">
               {isAdminEnvironment && (
                 <button
                   type="button"
@@ -572,29 +589,21 @@ export default function App() {
                 </button>
               )}
 
-              {/* 🌟 强效防止事件穿透截获的 Header Cart 按钮 */}
-              <div 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsCartOpen(true);
-                }}
-                className="inline-block cursor-pointer select-none"
+              {/* 🌟 极简全兼容 Header Cart 按钮 */}
+              <button
+                type="button"
+                onClick={openCartDrawer}
+                className="flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer"
+                style={{ backgroundColor: siteSettings.primary_color }}
               >
-                <button
-                  type="button"
-                  className="relative flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 pointer-events-auto"
-                  style={{ backgroundColor: siteSettings.primary_color }}
-                >
-                  <ShoppingCart className="w-4 h-4 pointer-events-none" />
-                  <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
-                  {totalCartItemsCount > 0 && (
-                    <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
-                      {totalCartItemsCount}
-                    </span>
-                  )}
-                </button>
-              </div>
+                <ShoppingCart className="w-4 h-4 pointer-events-none" />
+                <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
+                {totalCartItemsCount > 0 && (
+                  <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
+                    {totalCartItemsCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -724,9 +733,9 @@ export default function App() {
         </div>
       </main>
 
-      {/* 🌟 提权至全屏最高层级 (z-[99999]) 的 CART DRAWER */}
+      {/* 🌟 提权至全屏最高层级 (z-[999999]) 的 CART DRAWER */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-[99999] overflow-hidden">
+        <div className="fixed inset-0 z-[999999] overflow-hidden">
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800 relative z-10">
@@ -781,7 +790,7 @@ export default function App() {
 
       {/* 🌟 社交媒体引流结账弹窗 */}
       {checkoutStep && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative">
             <button onClick={() => setCheckoutStep(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
 
