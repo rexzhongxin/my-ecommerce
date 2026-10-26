@@ -22,7 +22,8 @@ import {
   Settings,
   Save,
   Palette,
-  MessageCircle
+  MessageCircle,
+  TrendingUp
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -63,7 +64,7 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('featured');
+  const [sortBy, setSortBy] = useState('popular'); // 默认按最高销量排序
   
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -73,7 +74,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState(null);
 
   const [newProduct, setNewProduct] = useState({
-    name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true
+    name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, sales_count: 0, is_active: true
   });
 
   const [shippingInfo, setShippingInfo] = useState({ fullName: '', email: '', address: '', city: '', zipCode: '' });
@@ -148,12 +149,13 @@ export default function App() {
       description: newProduct.description,
       rating: parseFloat(newProduct.rating),
       reviews: parseInt(newProduct.reviews),
+      sales_count: parseInt(newProduct.sales_count || 0),
       is_active: true
     }]);
 
     if (!error) {
       showToast(`商品 "${newProduct.name}" 发布成功！`);
-      setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true });
+      setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, sales_count: 0, is_active: true });
       fetchProducts(); 
     } else {
       showToast('发布失败：' + error.message);
@@ -229,15 +231,13 @@ export default function App() {
     }
   };
 
-  // 🌟 核心修改：全新马币与免税计算逻辑
   const cartSubtotal = useMemo(() => cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * item.quantity, 0), [cart]);
-  // 满 RM300 免邮，未满收 RM10 运费（购物车为空时邮费为 0）
   const shippingCost = cartSubtotal >= 300 || cartSubtotal === 0 ? 0 : 10.00;
-  // 不收取任何税费
   const taxCost = 0;
   const cartTotal = cartSubtotal + shippingCost + taxCost;
   const totalCartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  // 🌟 排序逻辑更新：包含 popular (最高销量)
   const displayedProducts = useMemo(() => {
     return products
       .filter(p => {
@@ -248,6 +248,7 @@ export default function App() {
         return isActive && matchesCategory && matchesSearch;
       })
       .sort((a, b) => {
+        if (sortBy === 'popular') return (b.sales_count || 0) - (a.sales_count || 0); // 销量最高排序
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
         if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
@@ -355,10 +356,14 @@ export default function App() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">商品名称</label>
                   <input type="text" placeholder="如: Sony WH-1000XM5" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">价格 (RM)</label>
                     <input type="number" step="0.01" placeholder="299.00" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">初始销量</label>
+                    <input type="number" placeholder="如 120" value={newProduct.sales_count} onChange={e => setNewProduct({...newProduct, sales_count: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">分类</label>
@@ -399,7 +404,7 @@ export default function App() {
                         <img src={p.image} alt="" className="w-12 h-12 object-cover rounded-lg border" />
                         <div>
                           <p className="text-sm font-bold text-slate-800 line-clamp-1">{p.name}</p>
-                          <p className="text-xs text-slate-400">RM {p.price} | {p.category}</p>
+                          <p className="text-xs text-slate-400">RM {p.price} | {p.category} | <span className="font-semibold text-indigo-600">已售出 {p.sales_count || 0} 件</span></p>
                         </div>
                       </div>
                       <button onClick={() => toggleProductActive(p.id, p.is_active)} className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${p.is_active !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
@@ -662,17 +667,19 @@ export default function App() {
             ))}
           </div>
 
+          {/* 🌟 核心修改：筛选增加 Most Popular (热销/最多人买) */}
           <div className="flex items-center space-x-3 self-end md:self-auto">
             <SlidersHorizontal className="w-4 h-4 text-slate-500" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer"
+              className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
             >
-              <option value="featured">Featured</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
+              <option value="popular">🔥 Most Popular (最多人买)</option>
+              <option value="featured">Featured (精选推荐)</option>
+              <option value="price-low">Price: Low to High (价格低到高)</option>
+              <option value="price-high">Price: High to Low (价格高到低)</option>
+              <option value="rating">Highest Rated (评分最高)</option>
             </select>
           </div>
         </div>
@@ -695,17 +702,34 @@ export default function App() {
                 <div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
                   <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(item)}>
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    
+                    {/* 热销 Badge 挂牌 */}
+                    {(item.sales_count > 50) && (
+                      <div className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center space-x-1">
+                        <TrendingUp className="w-3 h-3" />
+                        <span>HOT</span>
+                      </div>
+                    )}
                   </div>
+
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center space-x-1 text-amber-400 text-xs font-semibold">
-                        <Star className="w-4 h-4 fill-amber-400" />
-                        <span>{item.rating || 5.0}</span>
-                        <span className="text-slate-400">({item.reviews || 0})</span>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <div className="flex items-center space-x-1 text-amber-400 font-semibold">
+                          <Star className="w-4 h-4 fill-amber-400" />
+                          <span>{item.rating || 5.0}</span>
+                          <span className="text-slate-400">({item.reviews || 0})</span>
+                        </div>
+
+                        {/* 🌟 核心：显示销量 */}
+                        <span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
+                          {item.sales_count || 0} 已售出
+                        </span>
                       </div>
+
                       <h3 
                         onClick={() => setSelectedProduct(item)} 
-                        className="mt-2 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
+                        className="mt-1 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
                         style={{ color: siteSettings.text_color }}
                       >
                         {item.name}
@@ -746,7 +770,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* 🌟 购物车 Drawer */}
+      {/* Shopping cart rendered through a portal */}
       {isCartOpen && createPortal(
         <div className="fixed inset-0 z-[999999] overflow-hidden" role="dialog" aria-modal="true" aria-label="Shopping cart">
           <button
@@ -795,7 +819,6 @@ export default function App() {
                   <span>Shipping (RM 300 下免邮)</span>
                   <span>{shippingCost === 0 ? 'Free' : `RM ${shippingCost.toFixed(2)}`}</span>
                 </div>
-                {/* 🌟 保持免税显示 */}
                 <div className="flex justify-between text-sm text-slate-600">
                   <span>Tax</span>
                   <span>RM 0.00</span>
