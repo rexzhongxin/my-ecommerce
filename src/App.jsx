@@ -168,23 +168,32 @@ export default function App() {
     }
   };
 
-  const addToCart = (product, quantity = 1) => {
-    console.log('--- Add To Cart Action Triggered ---');
+  // 🌟 关键修复：深拷贝要加入的特定 product 对象，精准比对 id
+  const addToCart = (targetProduct, quantity = 1) => {
+    if (!targetProduct || !targetProduct.id) return;
+    
+    // 拷贝对象避免引用污染
+    const itemToAdd = { ...targetProduct };
+
     setCart(prevCart => {
-      const existing = prevCart.find(item => item.id === product.id);
+      const existing = prevCart.find(item => String(item.id) === String(itemToAdd.id));
       if (existing) {
-        return prevCart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item);
+        return prevCart.map(item => 
+          String(item.id) === String(itemToAdd.id) 
+            ? { ...item, quantity: item.quantity + quantity } 
+            : item
+        );
       }
-      return [...prevCart, { ...product, quantity }];
+      return [...prevCart, { ...itemToAdd, quantity }];
     });
 
     setIsCartOpen(true);
-    showToast(`Added "${product.name}" to cart!`);
+    showToast(`Added "${itemToAdd.name}" to cart!`);
   };
 
   const updateQuantity = (id, delta) => {
     setCart(prevCart => prevCart.map(item => {
-      if (item.id === id) {
+      if (String(item.id) === String(id)) {
         const newQty = item.quantity + delta;
         return newQty > 0 ? { ...item, quantity: newQty } : item;
       }
@@ -193,7 +202,7 @@ export default function App() {
   };
 
   const removeFromCart = (id) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== id));
+    setCart(prevCart => prevCart.filter(item => String(item.id) !== String(id)));
     showToast('Item removed from cart.');
   };
 
@@ -220,7 +229,7 @@ export default function App() {
     }
   };
 
-  const cartSubtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const cartSubtotal = useMemo(() => cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * item.quantity, 0), [cart]);
   const shippingCost = cartSubtotal > 100 || cartSubtotal === 0 ? 0 : 9.99;
   const taxCost = cartSubtotal * 0.08;
   const cartTotal = cartSubtotal + shippingCost + taxCost;
@@ -249,7 +258,6 @@ export default function App() {
   }, [siteSettings.store_name, lastPlacedOrderId, shippingInfo, cartTotal]);
 
   const openCartDrawer = () => {
-    console.log('>>> Direct Open Cart Triggered <<<');
     setIsCartOpen(true);
   };
 
@@ -680,7 +688,7 @@ export default function App() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-              {displayedProducts.map(product => (
+              {displayedProducts.map((product) => (
                 <div key={product.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
                   <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(product)}>
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -715,9 +723,13 @@ export default function App() {
                         ${parseFloat(product.price).toFixed(2)}
                       </span>
 
+                      {/* 🌟 核心：准确传递当前的 product 参数 */}
                       <button 
                         type="button"
-                        onClick={() => addToCart(product)} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(product);
+                        }} 
                         className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
                         style={{ backgroundColor: siteSettings.primary_color }}
                       >
