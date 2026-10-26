@@ -177,6 +177,10 @@ export default function App() {
       }
       return [...prevCart, { ...product, quantity }];
     });
+
+    setIsCartOpen(true); // 🌟 关键：加入购物车后自动展开右侧购物车 Drawer
+    showToast(`Added "${product.name}" to cart!`);
+  };
     showToast(`Added "${product.name}" to cart!`);
   };
 
@@ -713,58 +717,58 @@ export default function App() {
         </div>
       </main>
 
-      {/* --- CART DRAWER --- */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" />
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <h2 className="text-lg font-bold text-slate-900">Your Shopping Cart</h2>
-                <button onClick={() => setIsCartOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 divide-y divide-slate-100">
-                {cart.length === 0 ? (
-                  <p className="text-center py-16 text-slate-500">Your cart is empty</p>
-                ) : (
-                  cart.map(item => (
-                    <div key={item.id} className="py-4 flex items-center space-x-4">
-                      <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl" />
-                      <div className="flex-1">
-                        <h4 className="text-sm font-semibold">{item.name}</h4>
-                        <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>${item.price}</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <button onClick={() => updateQuantity(item.id, -1)} className="p-1 bg-slate-100 rounded"><Minus className="w-3 h-3" /></button>
-                          <span className="text-xs font-bold">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.id, 1)} className="p-1 bg-slate-100 rounded"><Plus className="w-3 h-3" /></button>
-                        </div>
-                      </div>
-                      <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {cart.length > 0 && (
-                <div className="p-6 border-t bg-slate-50 space-y-3">
-                  <div className="flex justify-between font-bold text-slate-900">
-                    <span>Total</span>
-                    <span>${cartTotal.toFixed(2)}</span>
-                  </div>
-                  <button
-                    onClick={() => { setIsCartOpen(false); setCheckoutStep('shipping'); }}
-                    className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90"
-                    style={{ backgroundColor: siteSettings.primary_color }}
-                  >
-                    Proceed to Order
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+{/* --- CART DRAWER --- */}
+{isCartOpen && (
+  <div className="fixed inset-0 z-50 overflow-hidden">
+    <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" />
+    <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <h2 className="text-lg font-bold text-slate-900">Your Shopping Cart</h2>
+          <button onClick={() => setIsCartOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
         </div>
-      )}
+
+        <div className="flex-1 overflow-y-auto p-6 divide-y divide-slate-100">
+          {cart.length === 0 ? (
+            <p className="text-center py-16 text-slate-500">Your cart is empty</p>
+          ) : (
+            cart.map(item => (
+              <div key={item.id} className="py-4 flex items-center space-x-4">
+                <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold">{item.name}</h4>
+                  <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>${item.price}</p>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <button onClick={() => updateQuantity(item.id, -1)} className="p-1 bg-slate-100 rounded"><Minus className="w-3 h-3" /></button>
+                    <span className="text-xs font-bold">{item.quantity}</span>
+                    <button onClick={() => updateQuantity(item.id, 1)} className="p-1 bg-slate-100 rounded"><Plus className="w-3 h-3" /></button>
+                  </div>
+                </div>
+                <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {cart.length > 0 && (
+          <div className="p-6 border-t bg-slate-50 space-y-3">
+            <div className="flex justify-between font-bold text-slate-900">
+              <span>Total</span>
+              <span>${cartTotal.toFixed(2)}</span>
+            </div>
+            <button
+              onClick={() => { setIsCartOpen(false); setCheckoutStep('shipping'); }}
+              className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90"
+              style={{ backgroundColor: siteSettings.primary_color }}
+            >
+              Proceed to Order
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* 🌟🌟🌟 重新设计的“直接引流至社交媒体/通讯软件”结账弹窗 🌟🌟🌟 */}
       {checkoutStep && (
