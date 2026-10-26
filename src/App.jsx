@@ -23,7 +23,9 @@ import {
   LayoutDashboard,
   Store,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Settings,
+  Save
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -46,7 +48,15 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false); // 默认显示前台，点击按钮后切换
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // 店面外观设置状态
+  const [siteSettings, setSiteSettings] = useState({
+    store_name: 'NexusMarket',
+    hero_title: 'Elevate Your Everyday Essentials.',
+    hero_subtitle: 'Discover premium curated electronics, modern home accents, and stylish apparel delivered directly to your door.'
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,13 +65,12 @@ export default function App() {
   
   // 交互状态
   const [cart, setCart] = useState([]);
-  const [wishlist, setWishlist] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [checkoutStep, setCheckoutStep] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // 新增/编辑商品表单状态（后台用）
+  // 新增商品表单状态
   const [newProduct, setNewProduct] = useState({
     name: '',
     category: 'Electronics',
@@ -80,12 +89,13 @@ export default function App() {
   // 页面加载时拉取数据
   useEffect(() => {
     fetchProducts();
+    fetchSettings();
     if (isAdmin) {
       fetchOrders();
     }
   }, [isAdmin]);
 
-  // 1. 从 Supabase 读取商品
+  // 1. 读取商品
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('products').select('*');
@@ -95,11 +105,23 @@ export default function App() {
     setLoading(false);
   };
 
-  // 2. 从 Supabase 读取订单
+  // 2. 读取订单
   const fetchOrders = async () => {
     const { data, error } = await supabase.from('orders').select('*');
     if (!error && data) {
       setOrders(data);
+    }
+  };
+
+  // 3. 读取店面外观设置
+  const fetchSettings = async () => {
+    const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+    if (!error && data) {
+      setSiteSettings({
+        store_name: data.store_name || 'NexusMarket',
+        hero_title: data.hero_title || 'Elevate Your Everyday Essentials.',
+        hero_subtitle: data.hero_subtitle || 'Discover premium curated electronics...'
+      });
     }
   };
 
@@ -108,7 +130,23 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // --- 后台操作：新增商品到 Supabase ---
+  // --- 后台操作：保存店面外观设置 ---
+  const handleSaveSettings = async (e) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ id: 1, ...siteSettings });
+
+    setSavingSettings(false);
+    if (!error) {
+      showToast('店面外观设置保存成功！已同步至前台');
+    } else {
+      showToast('保存失败：' + error.message);
+    }
+  };
+
+  // --- 后台操作：新增商品 ---
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.price || !newProduct.image) {
@@ -116,7 +154,7 @@ export default function App() {
       return;
     }
 
-    const { data, error } = await supabase.from('products').insert([
+    const { error } = await supabase.from('products').insert([
       {
         name: newProduct.name,
         category: newProduct.category,
@@ -127,10 +165,10 @@ export default function App() {
         reviews: parseInt(newProduct.reviews),
         is_active: true
       }
-    ]).select();
+    ]);
 
     if (!error) {
-      showToast(`商品 "${newProduct.name}" 已成功发布到云端！`);
+      showToast(`商品 "${newProduct.name}" 已成功发布！`);
       setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true });
       fetchProducts(); 
     } else {
@@ -138,7 +176,7 @@ export default function App() {
     }
   };
 
-  // --- 后台操作：一键切换上下架状态 ---
+  // --- 后台操作：上下架 ---
   const toggleProductActive = async (id, currentStatus) => {
     const { error } = await supabase.from('products').update({ is_active: !currentStatus }).eq('id', id);
     if (!error) {
@@ -147,7 +185,7 @@ export default function App() {
     }
   };
 
-  // --- 前台操作：购物车 ---
+  // --- 购物车及订单 logic ---
   const addToCart = (product, quantity = 1) => {
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
@@ -174,7 +212,6 @@ export default function App() {
     showToast('Item removed from cart.');
   };
 
-  // --- 提交订单写入 Supabase ---
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     setCheckoutStep('processing');
@@ -199,14 +236,12 @@ export default function App() {
     }
   };
 
-  // --- 计算 ---
   const cartSubtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
   const shippingCost = cartSubtotal > 100 || cartSubtotal === 0 ? 0 : 9.99;
   const taxCost = cartSubtotal * 0.08;
   const cartTotal = cartSubtotal + shippingCost + taxCost;
   const totalCartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // 过滤出前台展示商品
   const displayedProducts = useMemo(() => {
     return products
       .filter(p => {
@@ -224,17 +259,17 @@ export default function App() {
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
-  // ==================== 商家管理后台界面 (Admin Portal View) ====================
+  // ==================== 商家管理后台界面 (Admin Portal) ====================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-6 md:p-10">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto space-y-8">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div>
               <div className="flex items-center space-x-2 text-indigo-600 font-bold">
                 <LayoutDashboard className="w-6 h-6" />
-                <span className="text-xl">NexusMarket 商家管理后台</span>
+                <span className="text-xl">{siteSettings.store_name} 商家管理后台</span>
               </div>
               <p className="text-xs text-slate-500 mt-1">云端实时数据控制中心 (Supabase Enterprise Managed)</p>
             </div>
@@ -246,6 +281,52 @@ export default function App() {
               <Store className="w-4 h-4" />
               <span>返回网店前台</span>
             </button>
+          </div>
+
+          {/* 🌟 新增：店面外观与品牌设置面板 */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-indigo-600" /> 更改店面外观与品牌设置
+            </h2>
+            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">店铺名称 (Store Name)</label>
+                <input
+                  type="text"
+                  value={siteSettings.store_name}
+                  onChange={e => setSiteSettings({ ...siteSettings, store_name: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">首页大标题 (Hero Title)</label>
+                <input
+                  type="text"
+                  value={siteSettings.hero_title}
+                  onChange={e => setSiteSettings({ ...siteSettings, hero_title: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">首页宣传副标题 (Hero Subtitle)</label>
+                <input
+                  type="text"
+                  value={siteSettings.hero_subtitle}
+                  onChange={e => setSiteSettings({ ...siteSettings, hero_subtitle: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div className="md:col-span-3 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow transition-all"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingSettings ? '保存中...' : '保存店面修改'}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -414,13 +495,13 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             
-            {/* Logo */}
+            {/* 动态 Logo 与 店铺名称 */}
             <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
               <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
                 <ShoppingBag className="w-6 h-6 text-white" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tight">
-                NexusMarket
+                {siteSettings.store_name}
               </span>
             </div>
 
@@ -443,7 +524,7 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
-              {/* 重点：仅在属于 Admin 网址/环境时才渲染“商家后台”按钮 */}
+              {/* 仅在属于 Admin 网址/环境时才渲染“商家后台”按钮 */}
               {isAdminEnvironment && (
                 <button
                   onClick={() => {
@@ -475,7 +556,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* --- HERO BANNER --- */}
+      {/* --- 动态 HERO BANNER --- */}
       <section className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
           <div className="max-w-xl text-center md:text-left">
@@ -484,10 +565,10 @@ export default function App() {
               <span>Cloud Database Powered</span>
             </span>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-              Elevate Your Everyday Essentials.
+              {siteSettings.hero_title}
             </h1>
             <p className="mt-4 text-slate-300 text-base md:text-lg leading-relaxed">
-              Discover premium curated electronics, modern home accents, and stylish apparel delivered directly to your door.
+              {siteSettings.hero_subtitle}
             </p>
           </div>
         </div>
