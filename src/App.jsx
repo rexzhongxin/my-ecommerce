@@ -78,7 +78,7 @@ export default function App() {
   // 1. 从 Supabase 读取所有商品
   const fetchProducts = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('products').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from('products').select('*');
     if (!error && data) {
       setProducts(data);
     }
@@ -87,7 +87,7 @@ export default function App() {
 
   // 2. 从 Supabase 读取订单（进入后台时触发）
   const fetchOrders = async () => {
-    const { data, error } = await supabase.from('orders').select('*').order('id', { ascending: false });
+    const { data, error } = await supabase.from('orders').select('*');
     if (!error && data) {
       setOrders(data);
     }
