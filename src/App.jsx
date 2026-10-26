@@ -64,7 +64,7 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('featured'); // 🌟 恢复 featured 为默认基础选项
+  const [sortBy, setSortBy] = useState('featured');
   
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -208,10 +208,12 @@ export default function App() {
     showToast('Item removed from cart.');
   };
 
+  // 🌟 关键修复：下单成功后自动更新 Supabase 中商品的 sales_count
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
     setCheckoutStep('processing');
 
+    // 1. 保存订单数据
     const { data, error } = await supabase.from('orders').insert([{
       customer_name: shippingInfo.fullName,
       email: shippingInfo.email,
@@ -223,6 +225,30 @@ export default function App() {
 
     if (!error && data && data.length > 0) {
       setLastPlacedOrderId(data[0].id);
+
+      // 2. 🌟 遍历购物车，更新对应商品的 sales_count
+      for (const cartItem of cart) {
+        if (cartItem.id) {
+          // 查询当前商品的最新销量
+          const { data: currentProduct } = await supabase
+            .from('products')
+            .select('sales_count')
+            .eq('id', cartItem.id)
+            .single();
+
+          const currentSales = currentProduct?.sales_count || 0;
+          
+          // 在原有销量基础上累加本次购买数量
+          await supabase
+            .from('products')
+            .update({ sales_count: currentSales + cartItem.quantity })
+            .eq('id', cartItem.id);
+        }
+      }
+
+      // 3. 重新获取最新的商品数据（更新前端页面显示）
+      await fetchProducts();
+
       setCheckoutStep('success');
       setCart([]);
     } else {
@@ -666,7 +692,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* 🌟 核心修改：Featured 作为第一项（默认基础选项） */}
           <div className="flex items-center space-x-3 self-end md:self-auto">
             <SlidersHorizontal className="w-4 h-4 text-slate-500" />
             <select
