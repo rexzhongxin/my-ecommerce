@@ -25,121 +25,78 @@ import {
 } from 'lucide-react';
 
 // --- MOCK PRODUCT DATA ---
-const PRODUCTS = [
+const INITIAL_PRODUCTS = [
   {
     id: 1,
-    name: 'Aura Wireless Noise-Canceling Headphones',
-    category: 'electronics',
-    price: 249.99,
-    originalPrice: 299.99,
-    rating: 4.8,
-    reviewsCount: 128,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80',
-    description: 'Immerse yourself in pure audio clarity with active noise cancellation, 40-hour battery life, and ultra-comfortable memory foam earcups.',
-    isNew: true,
-    inStock: true,
-    tags: ['Best Seller', 'Audio']
+    name: "Sony WH-1000XM5 无线降噪耳机",
+    category: "Electronics",
+    price: 399.00,
+    rating: 4.9,
+    reviews: 230,
+    image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80",
+    description: "业界领先的智能主动降噪，拥有 30 小时超长续航与极佳的音质体验。"
   },
   {
     id: 2,
-    name: 'Minimalist Leather Smartwatch V2',
-    category: 'electronics',
-    price: 189.50,
-    originalPrice: 219.00,
-    rating: 4.6,
-    reviewsCount: 89,
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80',
-    description: 'Sleek hybrid smartwatch featuring heart-rate tracking, sleep analytics, 7-day battery life, and genuine Italian leather band.',
-    isNew: false,
-    inStock: true,
-    tags: ['Wearables', 'Tech']
+    name: "Apple M5 MacBook Air 13 英寸",
+    category: "Electronics",
+    price: 1099.00,
+    rating: 5.0,
+    reviews: 88,
+    image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500&q=80",
+    description: "极致轻薄设计，搭载全新 M5 芯片，强劲性能与全天候电池续航。"
   },
   {
     id: 3,
-    name: 'Ergonomic Mechanical Keyboard',
-    category: 'electronics',
-    price: 129.00,
-    originalPrice: 149.00,
-    rating: 4.9,
-    reviewsCount: 215,
-    image: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80',
-    description: 'Custom hot-swappable tactile switches, RGB per-key backlighting, and solid aluminum chassis for peak typing comfort.',
-    isNew: false,
-    inStock: true,
-    tags: ['Office', 'Gaming']
+    name: "Nike Renew Run 4 运动跑鞋",
+    category: "Footwear",
+    price: 89.00,
+    rating: 4.7,
+    reviews: 142,
+    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&q=80",
+    description: "舒适透气面料配以缓冲中底，专为日常慢跑与体能训练打造。"
   },
   {
     id: 4,
-    name: 'Nordic Organic Cotton Oversized Hoodie',
-    category: 'fashion',
-    price: 79.99,
-    originalPrice: 95.00,
-    rating: 4.7,
-    reviewsCount: 64,
-    image: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&q=80',
-    description: 'Ultra-soft 100% organic heavy cotton hoodie crafted with relaxed shoulder seams and durable double-stitched cuffs.',
-    isNew: true,
-    inStock: true,
-    tags: ['Apparel', 'Cozy']
+    name: "Salomon XT-WHISPER 户外越野鞋",
+    category: "Footwear",
+    price: 160.00,
+    rating: 4.8,
+    reviews: 64,
+    image: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500&q=80",
+    description: "防滑耐磨大底，抓地力强，兼具户外徒步性能与复古潮流外观。"
   },
   {
     id: 5,
-    name: 'Urban Waterproof Canvas Backpack',
-    category: 'fashion',
-    price: 94.00,
-    originalPrice: 110.00,
-    rating: 4.5,
-    reviewsCount: 92,
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80',
-    description: 'Durable weather-resistant roll-top backpack with padded 16-inch laptop compartment and hidden anti-theft pocket.',
-    isNew: false,
-    inStock: true,
-    tags: ['Travel', 'Bags']
+    name: "极简风复古机械手表",
+    category: "Accessories",
+    price: 199.50,
+    rating: 4.6,
+    reviews: 53,
+    image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=500&q=80",
+    description: "316L 精钢表壳配以真皮表带，全自动机械机芯，彰显品味。"
   },
   {
     id: 6,
-    name: 'Handcrafted Ceramic Coffee Set',
-    category: 'home',
-    price: 54.00,
-    originalPrice: 65.00,
-    rating: 4.8,
-    reviewsCount: 41,
-    image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=800&q=80',
-    description: 'Artisanal matte ceramic pour-over dripper with two matching double-wall insulated mugs. Dishwasher safe.',
-    isNew: false,
-    inStock: true,
-    tags: ['Kitchen', 'Artisan']
+    name: "Oakley 运动太阳眼镜 OO9096",
+    category: "Accessories",
+    price: 145.00,
+    rating: 4.9,
+    reviews: 79,
+    image: "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&q=80",
+    description: "包裹式运动造型，偏光镜片有效阻挡紫外线与强光眩光。"
   },
   {
     id: 7,
-    name: 'Aromatherapy Soy Wax Candle Pack',
-    category: 'home',
-    price: 36.50,
-    originalPrice: 45.00,
-    rating: 4.9,
-    reviewsCount: 156,
-    image: 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&q=80',
-    description: 'Set of 3 hand-poured soy candles with essential oils: Amber & Lavender, Cedarwood & Moss, Sandalwood & Vanilla.',
-    isNew: true,
-    inStock: true,
-    tags: ['Lifestyle', 'Relaxation']
-  },
-  {
-    id: 8,
-    name: 'Botanical Hydrating Facial Serum',
-    category: 'beauty',
-    price: 48.00,
-    originalPrice: 60.00,
-    rating: 4.7,
-    reviewsCount: 78,
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&q=80',
-    description: 'Lightweight hyaluronic acid and vitamin C serum that restores radiance and locks in deep cellular hydration.',
-    isNew: false,
-    inStock: true,
-    tags: ['Skincare', 'Organic']
+    name: "我的自定义商品（使用 public 本地图片）",
+    category: "Lifestyle",
+    price: 49.90,
+    rating: 5.0,
+    reviews: 12,
+    image: "/my-product.jpg", // 👈 这是放在 public/my-product.jpg 的本地图片示例
+    description: "这是直接读取项目 public 文件夹内部图片的写法示例。"
   }
 ];
-
 const CATEGORIES = [
   { id: 'all', name: 'All Products' },
   { id: 'electronics', name: 'Electronics' },
