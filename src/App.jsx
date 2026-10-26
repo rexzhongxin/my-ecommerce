@@ -1,16 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
-import { 
-  ShoppingBag, 
-  Search, 
-  ShoppingCart, 
-  X, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  Star, 
-  RefreshCw, 
+import {
+  ShoppingBag,
+  Search,
+  ShoppingCart,
+  X,
+  Plus,
+  Minus,
+  Trash2,
+  Star,
+  RefreshCw,
   SlidersHorizontal,
   Sparkles,
   Package,
@@ -37,7 +37,29 @@ const CATEGORIES = [
 const WHATSAPP_NUMBER = '60123456789';
 const INSTAGRAM_USERNAME = 'p0larize.me';
 
+// Centralised shipping / tax settings (single source of truth — do not
+// hard-code 300 / 10 in the cart label, footer, or shipping calculation).
+const FREE_SHIPPING_THRESHOLD = 300;
+const FLAT_SHIPPING_FEE = 10;
+const TAX_RATE = 0;
+
+// Local data-URI placeholder used when a product image fails to load.
+// It is not an external service. The onError handler below guards against
+// loops by clearing onerror before swapping the source.
+const PLACEHOLDER_IMAGE = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23e2e8f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%2364748b' font-family='sans-serif' font-size='18'%3ENo image%3C/text%3E%3C/svg%3E";
+const handleImageError = (e) => {
+  if (e.currentTarget.src !== PLACEHOLDER_IMAGE) {
+    e.currentTarget.onerror = null;
+    e.currentTarget.src = PLACEHOLDER_IMAGE;
+  }
+};
+
 export default function App() {
+  // WARNING: This hostname check is NOT real security. It only hides the
+  // admin button on non-admin deployments. Real protection still requires
+  // Supabase Auth plus Row Level Security: public read-only access for
+  // active products and settings, and writes only for an authenticated admin.
+  // Do not rely on a hostname check or any URL parameter to protect admin actions.
   const isAdminEnvironment = useMemo(() => {
     const hostname = window.location.hostname;
     return hostname.includes('admin');
@@ -66,13 +88,19 @@ export default function App() {
   const [sortBy, setSortBy] = useState('featured');
 
   const [cart, setCart] = useState([]);
+  const [cartLoaded, setCartLoaded] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [detailQuantity, setDetailQuantity] = useState(1);
   const [checkoutStep, setCheckoutStep] = useState(null);
   const [lastPlacedOrderId, setLastPlacedOrderId] = useState(null);
   const [lastOrderTotal, setLastOrderTotal] = useState(0);
   const [lastOrderSummary, setLastOrderSummary] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
+  const [productsError, setProductsError] = useState(null);
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [infoModal, setInfoModal] = useState(null);
 
   const [newProduct, setNewProduct] = useState({
     name: '', category: 'Electronics', price: '', image: '', description: '', rating: 0, reviews: 0, sales_count: 0, is_active: true
@@ -88,20 +116,71 @@ export default function App() {
     }
   }, [isAdmin]);
 
+  // Load the cart from localStorage on first mount. Bad or missing data is
+  // ignored so a corrupt stored value can never break the storefront.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('p0larize-cart');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setCart(parsed.filter(item => item && (item.id || item.name)).map(item => ({ ...item, quantity: Math.max(1, parseInt(item.quantity) || 1) })));
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load cart from localStorage:', err);
+    }
+    setCartLoaded(true);
+  }, []);
+
+  // Save the cart to localStorage whenever it changes (after the first
+  // load, so the initial empty cart does not overwrite a stored cart).
+  useEffect(() => {
+    if (!cartLoaded) return;
+    try {
+      localStorage.setItem('p0larize-cart', JSON.stringify(cart));
+    } catch (err) {
+      console.warn('Could not save cart to localStorage:', err);
+    }
+  }, [cart, cartLoaded]);
+
+  // Close the product detail modal with Escape, only while it is open.
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setSelectedProduct(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedProduct]);
+
+  // Page title follows the store settings once they load.
+  useEffect(() => {
+    document.title = `${siteSettings.store_name} | ${siteSettings.hero_title}`;
+  }, [siteSettings.store_name, siteSettings.hero_title]);
+
   const fetchProducts = async () => {
     setLoading(true);
+    setProductsError(null);
     const { data, error } = await supabase.from('products').select('*');
-    if (!error && data) setProducts(data);
+    if (error) {
+      setProductsError(error.message);
+    } else if (data) {
+      setProducts(data);
+    }
     setLoading(false);
   };
 
   const fetchOrders = async () => {
-    const { data, error } = await supabase.from('orders').select('*');
+    const { data, error } = await supabase.from('orders').select('*').order('id', { ascending: false });
     if (!error && data) setOrders(data);
   };
 
   const fetchSettings = async () => {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+    if (error) {
+      setProductsError(error.message);
+    }
     if (!error && data) {
       setSiteSettings({
         store_name: data.store_name || 'p0larize.me',
@@ -135,6 +214,26 @@ export default function App() {
     }
   };
 
+  const resetProductForm = () => {
+    setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 0, reviews: 0, sales_count: 0, is_active: true });
+    setEditingProductId(null);
+  };
+
+  const startEditProduct = (p) => {
+    setEditingProductId(p.id);
+    setNewProduct({
+      name: p.name || '',
+      category: p.category || 'Electronics',
+      price: p.price === null || p.price === undefined ? '' : String(p.price),
+      image: p.image || '',
+      description: p.description || '',
+      rating: p.rating || 0,
+      reviews: p.reviews || 0,
+      sales_count: p.sales_count || 0,
+      is_active: p.is_active !== false
+    });
+  };
+
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.price || !newProduct.image) {
@@ -142,7 +241,7 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.from('products').insert([{
+    const payload = {
       name: newProduct.name,
       category: newProduct.category,
       price: parseFloat(newProduct.price),
@@ -150,16 +249,31 @@ export default function App() {
       description: newProduct.description,
       rating: parseFloat(newProduct.rating),
       reviews: parseInt(newProduct.reviews),
-      sales_count: parseInt(newProduct.sales_count || 0),
-      is_active: true
-    }]);
+      sales_count: parseInt(newProduct.sales_count || 0)
+    };
+
+    // Edit mode updates the existing row (using existing columns only);
+    // is_active is deliberately left untouched so editing a deactivated
+    // product does not silently reactivate it. Create mode inserts a new row.
+    const { error } = editingProductId
+      ? await supabase.from('products').update(payload).eq('id', editingProductId)
+      : await supabase.from('products').insert([{ ...payload, is_active: true }]);
 
     if (!error) {
-      showToast(`商品 "${newProduct.name}" 发布成功！`);
-      setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 0, reviews: 0, sales_count: 0, is_active: true });
+      showToast(editingProductId ? `商品 "${newProduct.name}" 修改成功！` : `商品 "${newProduct.name}" 发布成功！`);
+      resetProductForm();
       fetchProducts();
     } else {
       showToast('发布失败：' + error.message);
+    }
+  };
+
+  const handleUpdateOrderStatus = async (id, status) => {
+    const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+    if (!error) {
+      fetchOrders();
+    } else {
+      showToast('订单状态更新失败：' + error.message);
     }
   };
 
@@ -210,12 +324,24 @@ export default function App() {
     showToast('Item removed from cart.');
   };
 
-  // 🌟 修复核心：已售出数量 (sales_count) 自动累加逻辑
+  // 🌟 关键修复：下单成功后自动更新 Supabase 中商品的 sales_count
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
+    // Checkout validation, before anything is submitted or set to processing.
+    const phoneDigits = (shippingInfo.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length < 7) {
+      showToast('Please enter a valid phone number with at least 7 digits.');
+      return;
+    }
+    if (!termsAccepted) {
+      showToast('Please accept the terms to continue.');
+      return;
+    }
     setCheckoutStep('processing');
 
     // 1. 保存订单数据
+    // Note: no new phone column is added here (schema unknown). Phone, city
+    // and zip are appended to the address string saved below.
     const { data, error } = await supabase.from('orders').insert([{
       customer_name: shippingInfo.fullName,
       email: shippingInfo.email,
@@ -227,51 +353,48 @@ export default function App() {
 
     if (!error && data && data.length > 0) {
       setLastPlacedOrderId(data[0].id);
+      // Snapshot the order total and items BEFORE clearing the cart, so the
+      // WhatsApp message and success screen do not show RM 0.00.
       setLastOrderTotal(cartTotal);
       setLastOrderSummary(cart.map(cartItem => `${cartItem.name} x${cartItem.quantity} - RM ${((parseFloat(cartItem.price) || 0) * cartItem.quantity).toFixed(2)}`).join('; '));
 
-      // 2. 🌟 遍历购物车，更新销量（双重匹配机制：支持按 ID 或按商品名称更新）
+      // 2. Update sales_count, by product id ONLY. The old by-name fallback
+      // is removed: if two products shared a name it would update the wrong
+      // rows, and items without an id cannot be matched safely, so they are
+      // skipped with a warning instead of being guessed at.
+      // NOTE — remaining race: this is still read-then-write, so two orders
+      // for the same product at the same moment can lose a count. A true
+      // atomic fix needs a Supabase Postgres function (see SUPABASE_SETUP.md);
+      // this app deliberately does NOT call a non-existent RPC.
       for (const cartItem of cart) {
+        if (!cartItem.id) {
+          console.warn('Skipping sales update for item without an id:', cartItem.name);
+          continue;
+        }
         try {
-          if (cartItem.id) {
-            // 查出目前最新的 sales_count
-            const { data: prodData } = await supabase
-              .from('products')
-              .select('sales_count')
-              .eq('id', cartItem.id)
-              .maybeSingle();
+          const { data: currentProduct } = await supabase
+            .from('products')
+            .select('sales_count')
+            .eq('id', cartItem.id)
+            .single();
 
-            const currentSales = prodData?.sales_count || 0;
+          const currentSales = currentProduct?.sales_count || 0;
 
-            await supabase
-              .from('products')
-              .update({ sales_count: currentSales + cartItem.quantity })
-              .eq('id', cartItem.id);
-          } else if (cartItem.name) {
-            // 如果没有 ID，则降级按名称精准匹配更新
-            const { data: prodData } = await supabase
-              .from('products')
-              .select('sales_count')
-              .eq('name', cartItem.name)
-              .maybeSingle();
-
-            const currentSales = prodData?.sales_count || 0;
-
-            await supabase
-              .from('products')
-              .update({ sales_count: currentSales + cartItem.quantity })
-              .eq('name', cartItem.name);
-          }
+          await supabase
+            .from('products')
+            .update({ sales_count: currentSales + cartItem.quantity })
+            .eq('id', cartItem.id);
         } catch (err) {
-          console.error("更新销量失败:", err);
+          console.error('Failed to update sales_count for product', cartItem.id, err);
         }
       }
 
-      // 3. 重新获取最新的商品数据，前台页面实时呈现新销量
+      // 3. 重新获取最新的商品数据（更新前端页面显示）
       await fetchProducts();
 
       setCheckoutStep('success');
       setCart([]);
+      setTermsAccepted(false);
     } else {
       showToast('提交失败：' + (error ? error.message : '未知错误'));
       setCheckoutStep(null);
@@ -279,8 +402,8 @@ export default function App() {
   };
 
   const cartSubtotal = useMemo(() => cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * item.quantity, 0), [cart]);
-  const shippingCost = cartSubtotal >= 300 || cartSubtotal === 0 ? 0 : 10.00;
-  const taxCost = 0;
+  const shippingCost = cartSubtotal >= FREE_SHIPPING_THRESHOLD || cartSubtotal === 0 ? 0 : FLAT_SHIPPING_FEE;
+  const taxCost = cartSubtotal * TAX_RATE;
   const cartTotal = cartSubtotal + shippingCost + taxCost;
   const totalCartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -302,6 +425,9 @@ export default function App() {
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
+  // Visible categories are derived from products that actually exist, so an
+  // empty category is not advertised. While loading, fall back to the full
+  // list so the UI does not flicker empty.
   const visibleCategories = useMemo(() => {
     if (loading) return CATEGORIES;
     const activeCategories = new Set(products.filter(p => p.is_active !== false).map(p => p.category));
@@ -401,7 +527,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit">
               <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-600" /> 发布新商品
+                <Plus className="w-5 h-5 text-indigo-600" /> {editingProductId ? '编辑商品' : '发布新商品'}
               </h2>
               <form onSubmit={handleCreateProduct} className="space-y-4">
                 <div>
@@ -435,7 +561,10 @@ export default function App() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">详细描述</label>
                   <textarea rows="3" placeholder="描述商品亮点..." value={newProduct.description} onChange={e => setNewProduct({...newProduct, description: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md text-sm">保存并上架</button>
+                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md text-sm">{editingProductId ? '保存修改' : '保存并上架'}</button>
+                {editingProductId && (
+                  <button type="button" onClick={resetProductForm} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl text-sm">Cancel Edit</button>
+                )}
               </form>
             </div>
 
@@ -451,17 +580,20 @@ export default function App() {
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto pr-2">
                   {products.map(p => (
-                    <div key={p.id || p.name} className="py-3 flex items-center justify-between gap-4">
+                    <div key={p.id} className="py-3 flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-3">
-                        <img src={p.image} alt="" className="w-12 h-12 object-cover rounded-lg border" />
+                        <img src={p.image} alt={p.name} onError={handleImageError} className="w-12 h-12 object-cover rounded-lg border" />
                         <div>
                           <p className="text-sm font-bold text-slate-800 line-clamp-1">{p.name}</p>
                           <p className="text-xs text-slate-400">RM {p.price} | {p.category} | <span className="font-semibold text-indigo-600">已售出 {p.sales_count || 0} 件</span></p>
                         </div>
                       </div>
-                      <button onClick={() => toggleProductActive(p.id, p.is_active)} className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${p.is_active !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
-                        {p.is_active !== false ? (<><span>已上架</span> <ToggleRight className="w-4 h-4 text-emerald-600" /></>) : (<><span>已下架</span> <ToggleLeft className="w-4 h-4 text-rose-400" /></>)}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => startEditProduct(p)} className="px-3 py-1.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-600 border border-indigo-200">Edit</button>
+                        <button onClick={() => toggleProductActive(p.id, p.is_active)} className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${p.is_active !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
+                          {p.is_active !== false ? (<><span>已上架</span> <ToggleRight className="w-4 h-4 text-emerald-600" /></>) : (<><span>已下架</span> <ToggleLeft className="w-4 h-4 text-rose-400" /></>)}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -477,13 +609,23 @@ export default function App() {
                 <div className="space-y-3 max-h-[300px] overflow-y-auto">
                   {orders.length === 0 ? (<p className="text-xs text-slate-400 text-center py-6">暂无订单数据。</p>) : (
                     orders.map(o => (
-                      <div key={o.id || o.created_at} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                      <div key={o.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
                         <div className="flex justify-between font-bold text-slate-800">
-                          <span>订单号: #{o.id || 'N/A'}</span>
+                          <span>订单号: #{o.id}</span>
                           <span className="text-indigo-600">RM {o.total_price?.toFixed(2)}</span>
                         </div>
                         <p><span className="text-slate-500">顾客:</span> {o.customer_name} ({o.email})</p>
                         <p><span className="text-slate-500">送货地址:</span> {o.address}</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-slate-500">状态:</span>
+                          <select value={o.status || 'pending'} onChange={(e) => handleUpdateOrderStatus(o.id, e.target.value)} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold outline-none">
+                            <option value="pending">pending</option>
+                            <option value="confirmed">confirmed</option>
+                            <option value="shipped">shipped</option>
+                            <option value="delivered">delivered</option>
+                            <option value="cancelled">cancelled</option>
+                          </select>
+                        </div>
                       </div>
                     ))
                   )}
@@ -496,329 +638,363 @@ export default function App() {
     );
   }
 
-  // ==================== 前台网店界面 (Public Store View) ====================
-  return (
-    <div 
-      className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
-      style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color }}
-    >
-      
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all animate-bounce">
-          <Sparkles className="w-5 h-5 text-indigo-400" />
-          <span className="text-sm font-medium">{toastMessage}</span>
-        </div>
-      )}
+// ==================== 前台网店界面 (Public Store View) ====================
+return (
+<div
+className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
+style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color}}
+>
 
-      {/* 页面右下角全局悬浮购物车 */}
-      <button
-        type="button"
-        onClick={openCartDrawer}
-        className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all cursor-pointer"
-      >
-        <ShoppingCart className="w-6 h-6 text-indigo-400" />
-        <span className="text-xs font-bold">View Cart ({totalCartItemsCount})</span>
-      </button>
+{/* Toast Notification */}
+{toastMessage && (
+<div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all animate-bounce">
+<Sparkles className="w-5 h-5 text-indigo-400" />
+<span className="text-sm font-medium">{toastMessage}</span>
+</div>
+)}
 
-      {/* Admin 专属前台“实时调色”悬浮卡片 */}
-      {isAdminEnvironment && (
-        <div className="fixed bottom-24 right-6 z-50">
-          {!showColorPicker ? (
-            <button
-              onClick={() => setShowColorPicker(true)}
-              className="flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs hover:bg-slate-800 border border-slate-700 transition-all hover:scale-105"
-            >
-              <Palette className="w-4 h-4 text-indigo-400" />
-              <span>实时调色板</span>
-            </button>
-          ) : (
-            <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-slate-200 w-72 text-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center justify-between border-b pb-2">
-                <span className="text-xs font-bold flex items-center gap-1 text-indigo-600">
-                  <Palette className="w-4 h-4" /> 实时前台调色
-                </span>
-                <button onClick={() => setShowColorPicker(false)} className="text-slate-400 hover:text-slate-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+{/* 页面右下角全局 */}
+<button
+type="button"
+onClick={openCartDrawer}
+className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all cursor-pointer"
+>
+<ShoppingCart className="w-6 h-6 text-indigo-400" />
+<span className="text-xs font-bold">View Cart ({totalCartItemsCount})</span>
+</button>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">主色调 (Primary)</label>
-                  <div className="flex items-center space-x-2">
-                    <input 
-                      type="color" 
-                      value={siteSettings.primary_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, primary_color: e.target.value })}
-                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-                    />
-                    <input 
-                      type="text" 
-                      value={siteSettings.primary_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, primary_color: e.target.value })}
-                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-                    />
-                  </div>
-                </div>
+{/* Admin 专属前台“实时调色”悬浮卡片 */}
+{isAdminEnvironment && (
+<div className="fixed bottom-24 right-6 z-50">
+{!showColorPicker? (
+<button
+onClick={() => setShowColorPicker(true)}
+className="flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs hover:bg-slate-800 border border-slate-700 transition-all hover:scale-105"
+>
+<Palette className="w-4 h-4 text-indigo-400" />
+<span>实时调色板</span>
+</button>
+): (
+<div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-slate-200 w-72 text-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
+<div className="flex items-center justify-between border-b pb-2">
+<span className="text-xs font-bold flex items-center gap-1 text-indigo-600">
+<Palette className="w-4 h-4" /> 实时前台调色
+</span>
+<button onClick={() => setShowColorPicker(false)} className="text-slate-400 hover:text-slate-600">
+<X className="w-4 h-4" />
+</button>
+</div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">文字颜色 (Text)</label>
-                  <div className="flex items-center space-x-2">
-                    <input 
-                      type="color" 
-                      value={siteSettings.text_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, text_color: e.target.value })}
-                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-                    />
-                    <input 
-                      type="text" 
-                      value={siteSettings.text_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, text_color: e.target.value })}
-                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-                    />
-                  </div>
-                </div>
+<div className="space-y-3">
+<div>
+<label className="block text-[11px] font-bold text-slate-600 mb-1">主色调 (Primary)</label>
+<div className="flex items-center space-x-2">
+<input
+type="color"
+value={siteSettings.primary_color}
+onChange={e => setSiteSettings({...siteSettings, primary_color: e.target.value})}
+className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+/>
+<input
+type="text"
+value={siteSettings.primary_color}
+onChange={e => setSiteSettings({...siteSettings, primary_color: e.target.value})}
+className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+/>
+</div>
+</div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">网页背景色 (Background)</label>
-                  <div className="flex items-center space-x-2">
-                    <input 
-                      type="color" 
-                      value={siteSettings.bg_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, bg_color: e.target.value })}
-                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-                    />
-                    <input 
-                      type="text" 
-                      value={siteSettings.bg_color}
-                      onChange={e => setSiteSettings({ ...siteSettings, bg_color: e.target.value })}
-                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-                    />
-                  </div>
-                </div>
-              </div>
+<div>
+<label className="block text-[11px] font-bold text-slate-600 mb-1">文字颜色 (Text)</label>
+<div className="flex items-center space-x-2">
+<input
+type="color"
+value={siteSettings.text_color}
+onChange={e => setSiteSettings({...siteSettings, text_color: e.target.value})}
+className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+/>
+<input
+type="text"
+value={siteSettings.text_color}
+onChange={e => setSiteSettings({...siteSettings, text_color: e.target.value})}
+className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+/>
+</div>
+</div>
 
-              <button
-                onClick={handleSaveSettings}
-                disabled={savingSettings}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-1"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{savingSettings ? '保存中...' : '保存全新配色'}</span>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+<div>
+<label className="block text-[11px] font-bold text-slate-600 mb-1">网页背景色 (Background)</label>
+<div className="flex items-center space-x-2">
+<input
+type="color"
+value={siteSettings.bg_color}
+onChange={e => setSiteSettings({...siteSettings, bg_color: e.target.value})}
+className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+/>
+<input
+type="text"
+value={siteSettings.bg_color}
+onChange={e => setSiteSettings({...siteSettings, bg_color: e.target.value})}
+className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+/>
+</div>
+</div>
+</div>
 
-      {/* --- NAVBAR --- */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            
-            {/* Logo */}
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
-              {siteSettings.store_logo ? (
-                <img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
-              ) : (
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: siteSettings.primary_color }}>
-                  <ShoppingBag className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <span className="text-2xl font-bold tracking-tight" style={{ color: siteSettings.primary_color }}>
-                {siteSettings.store_name}
-              </span>
-            </div>
+<button
+onClick={handleSaveSettings}
+disabled={savingSettings}
+className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-1"
+>
+<Save className="w-3.5 h-3.5" />
+<span>{savingSettings? '保存中...': '保存全新配色'}</span>
+</button>
+</div>
+)}
+</div>
+)}
 
-            {/* Search Bar */}
-            <div className="hidden md:flex flex-1 max-w-md mx-8 relative">
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
-              />
-              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
-            </div>
+{/* --- NAVBAR --- */}
+<header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div className="flex items-center justify-between h-20">
 
-            {/* Actions */}
-            <div className="flex items-center space-x-3">
-              {isAdminEnvironment && (
-                <button
-                  type="button"
-                  onClick={() => { setIsAdmin(true); fetchOrders(); }}
-                  className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>商家后台</span>
-                </button>
-              )}
+{/* Logo */}
+<div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery('');}}>
+{siteSettings.store_logo? (
+<img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
+): (
+<div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: siteSettings.primary_color}}>
+<ShoppingBag className="w-6 h-6 text-white" />
+</div>
+)}
+<span className="text-2xl font-bold tracking-tight" style={{ color: siteSettings.primary_color}}>
+{siteSettings.store_name}
+</span>
+</div>
 
-              {/* Header Cart 按钮 */}
-              <button
-                type="button"
-                onClick={openCartDrawer}
-                className="flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer"
-                style={{ backgroundColor: siteSettings.primary_color }}
-              >
-                <ShoppingCart className="w-4 h-4 pointer-events-none" />
-                <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
-                {totalCartItemsCount > 0 && (
-                  <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
-                    {totalCartItemsCount}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+{/* Search Bar */}
+<div className="hidden md:flex flex-1 max-w-md mx-8 relative">
+<input
+type="text"
+placeholder="Search products..."
+value={searchQuery}
+onChange={(e) => setSearchQuery(e.target.value)}
+className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
+/>
+<Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+</div>
 
-      {/* --- HERO BANNER --- */}
-      <section 
-        className="text-white relative overflow-hidden transition-all duration-300"
-        style={{ 
-          background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)` 
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
-          <div className="max-w-xl text-center md:text-left">
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-              {siteSettings.hero_title}
-            </h1>
-            <p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
-              {siteSettings.hero_subtitle}
-            </p>
-          </div>
-        </div>
-      </section>
+{/* Actions */}
+<div className="flex items-center space-x-3">
+{isAdminEnvironment && (
+<button
+type="button"
+onClick={() => { setIsAdmin(true); fetchOrders();}}
+className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
+>
+<LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+<span>商家后台</span>
+</button>
+)}
 
-      {/* --- MAIN CATALOG --- */}
-      <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
-          <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-            {visibleCategories.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  selectedCategory === cat.id
-                    ? 'text-white shadow-md'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-                style={{ backgroundColor: selectedCategory === cat.id ? siteSettings.primary_color : undefined }}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
+{/* Header Cart 按钮 */}
+<button
+type="button"
+onClick={openCartDrawer}
+className="flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer"
+style={{ backgroundColor: siteSettings.primary_color}}
+>
+<ShoppingCart className="w-4 h-4 pointer-events-none" />
+<span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
+{totalCartItemsCount > 0 && (
+<span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color}}>
+{totalCartItemsCount}
+</span>
+)}
+</button>
+</div>
+</div>
+</div>
+</header>
 
-          <div className="flex items-center space-x-3 self-end md:self-auto">
-            <SlidersHorizontal className="w-4 h-4 text-slate-500" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
-            >
-              <option value="featured">Featured</option>
-              <option value="popular">Most Popular</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
-            </select>
-          </div>
-        </div>
+{/* Mobile search: the desktop search bar above is hidden on mobile
+    (hidden md:flex), so mobile shoppers get this input instead. It shares
+    the same searchQuery state as the desktop input. */}
+<div className="md:hidden bg-white border-b border-slate-200 px-4 py-3">
+  <div className="relative">
+    <input
+      type="text"
+      placeholder="Search products..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
+    />
+    <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+  </div>
+</div>
 
-        {/* Product Grid */}
-        <div className="mt-8">
-          {loading ? (
-            <div className="text-center py-20">
-              <RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color }} />
-              <p className="text-sm opacity-70 font-medium">Loading products...</p>
-            </div>
-          ) : displayedProducts.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
-              <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-700">No active products found</h3>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-              {displayedProducts.map((item) => (
-                <div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
-                  <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(item)}>
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    
-                    {(item.sales_count > 50) && (
-                      <div className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center space-x-1">
-                        <TrendingUp className="w-3 h-3" />
-                        <span>HOT</span>
-                      </div>
-                    )}
-                  </div>
+{/* --- HERO BANNER --- */}
+<section
+className="text-white relative overflow-hidden transition-all duration-300"
+style={{
+background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)`
+}}
+>
+<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
+<div className="max-w-xl text-center md:text-left">
+<span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
+<Sparkles className="w-3.5 h-3.5" />
+<span>Cloud Database Powered</span>
+</span>
+<h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
+{siteSettings.hero_title}
+</h1>
+<p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
+{siteSettings.hero_subtitle}
+</p>
+</div>
+</div>
+</section>
 
-                  <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        {item.reviews > 0 ? (
-                          <div className="flex items-center space-x-1 text-amber-400 font-semibold">
-                            <Star className="w-4 h-4 fill-amber-400" />
-                            <span>{item.rating}</span>
-                            <span className="text-slate-400">({item.reviews})</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">No reviews yet</span>
-                        )}
+{/* --- MAIN CATALOG --- */}
+<main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
+<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
+<div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+{visibleCategories.map(cat => (
+<button
+key={cat.id}
+onClick={() => setSelectedCategory(cat.id)}
+className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+selectedCategory === cat.id
+? 'text-white shadow-md'
+: 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+}`}
+style={{ backgroundColor: selectedCategory === cat.id? siteSettings.primary_color: undefined}}
+>
+{cat.name}
+</button>
+))}
+</div>
 
-                        <span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
-                          {item.sales_count || 0} sold
-                        </span>
-                      </div>
+<div className="flex items-center space-x-3 self-end md:self-auto">
+<SlidersHorizontal className="w-4 h-4 text-slate-500" />
+<select
+value={sortBy}
+onChange={(e) => setSortBy(e.target.value)}
+className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
+>
+<option value="featured">Featured</option>
+<option value="popular">Most Popular</option>
+<option value="price-low">Price: Low to High</option>
+<option value="price-high">Price: High to Low</option>
+<option value="rating">Highest Rated</option>
+</select>
+</div>
+</div>
 
-                      <h3 
-                        onClick={() => setSelectedProduct(item)} 
-                        className="mt-1 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
-                        style={{ color: siteSettings.text_color }}
-                      >
-                        {item.name}
-                      </h3>
-                      <p 
-                        className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
-                        style={{ color: siteSettings.text_color }}
-                      >
-                        {item.description}
-                      </p>
-                    </div>
+{/* Product Grid */}
+<div className="mt-8">
+{productsError && (
+<div className="mb-6 bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+<p className="text-sm text-rose-700">Could not load store data: {productsError}</p>
+<button
+type="button"
+onClick={() => { fetchProducts(); fetchSettings(); }}
+className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-xl text-sm shrink-0"
+>
+Retry
+</button>
+</div>
+)}
+{loading? (
+<div className="text-center py-20">
+<RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color}} />
+<p className="text-sm opacity-70 font-medium">Loading products...</p>
+</div>
+): displayedProducts.length === 0? (
+<div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+<Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+<h3 className="text-lg font-bold text-slate-700">No active products found</h3>
+</div>
+): (
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+{displayedProducts.map((item) => (
+<div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
+<div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => { setSelectedProduct(item); setDetailQuantity(1); }}>
+<img src={item.image} alt={item.name} onError={handleImageError} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
 
-                    <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
-                      <span 
-                        className="text-lg font-bold"
-                        style={{ color: siteSettings.text_color }}
-                      >
-                        RM {parseFloat(item.price).toFixed(2)}
-                      </span>
+{/* 热销 Badge 挂牌 */}
+{(item.sales_count > 50) && (
+<div className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center space-x-1">
+<TrendingUp className="w-3 h-3" />
+<span>HOT</span>
+</div>
+)}
+</div>
 
-                      <button 
-                        type="button"
-                        aria-label={`Add ${item.name} to cart`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addToCart(item);
-                        }} 
-                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
-                        style={{ backgroundColor: siteSettings.primary_color }}
-                      >
-                        <ShoppingCart className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
+<div className="p-5 flex-1 flex flex-col justify-between">
+<div>
+<div className="flex items-center justify-between text-xs mb-1">
+{item.reviews > 0? (
+<div className="flex items-center space-x-1 text-amber-400 font-semibold">
+<Star className="w-4 h-4 fill-amber-400" />
+<span>{item.rating}</span>
+<span className="text-slate-400">({item.reviews})</span>
+</div>
+): (
+<span className="text-slate-400">No reviews yet</span>
+)}
+
+{/* 显示销量 */}
+<span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
+{item.sales_count || 0} sold
+</span>
+</div>
+
+<h3
+onClick={() => { setSelectedProduct(item); setDetailQuantity(1); }}
+className="mt-1 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
+style={{ color: siteSettings.text_color}}
+>
+{item.name}
+</h3>
+<p
+className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
+style={{ color: siteSettings.text_color}}
+>
+{item.description}
+</p>
+</div>
+
+<div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
+<span
+className="text-lg font-bold"
+style={{ color: siteSettings.text_color}}
+>
+RM {parseFloat(item.price).toFixed(2)}
+</span>
+
+<button
+type="button"
+aria-label={`Add ${item.name} to cart`}
+onClick={(e) => {
+e.stopPropagation();
+addToCart(item);
+}}
+className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
+style={{ backgroundColor: siteSettings.primary_color}}
+>
+<ShoppingCart className="w-4 h-4" />
+</button>
+</div>
+</div>
+</div>
+))}
+</div>
+)}
+</div>
+</main>
 
       {/* --- FOOTER --- */}
       <footer className="bg-white border-t border-slate-200">
@@ -826,9 +1002,12 @@ export default function App() {
           <div>
             <p className="text-lg font-bold text-slate-900">{siteSettings.store_name}</p>
             <p className="text-sm text-slate-500 mt-1">{siteSettings.hero_title}</p>
-            <p className="text-sm text-slate-500 mt-1">Shipping: Free above RM 300, otherwise RM 10.</p>
+            <p className="text-sm text-slate-500 mt-1">Shipping: Free above RM {FREE_SHIPPING_THRESHOLD}, otherwise RM {FLAT_SHIPPING_FEE.toFixed(2)}.</p>
           </div>
-          <div className="flex items-center gap-4 text-sm font-semibold">
+          <div className="flex flex-wrap items-center gap-4 text-sm font-semibold">
+            <button type="button" onClick={() => setInfoModal('shipping')} className="text-slate-700 hover:underline">Shipping</button>
+            <button type="button" onClick={() => setInfoModal('returns')} className="text-slate-700 hover:underline">Returns</button>
+            <button type="button" onClick={() => setInfoModal('privacy')} className="text-slate-700 hover:underline">Privacy</button>
             <a
               href={`https://wa.me/${WHATSAPP_NUMBER}`}
               target="_blank"
@@ -848,6 +1027,24 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Footer info modal (static text only — no new routes or tables). */}
+      {infoModal && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800" onClick={() => setInfoModal(null)}>
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <button type="button" aria-label="Close" onClick={() => setInfoModal(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            <h2 className="text-xl font-extrabold text-slate-900">{infoModal === 'shipping' ? 'Shipping' : infoModal === 'returns' ? 'Returns' : 'Privacy'}</h2>
+            <p className="text-sm text-slate-700 leading-relaxed mt-4">
+              {infoModal === 'shipping'
+                ? `Shipping is free for orders of RM ${FREE_SHIPPING_THRESHOLD} and above; otherwise a flat RM ${FLAT_SHIPPING_FEE.toFixed(2)} fee applies. After you submit your order, the seller will confirm delivery details with you on WhatsApp.`
+                : infoModal === 'returns'
+                  ? 'Returns: contact the seller on WhatsApp within 7 days of delivery if something is wrong. Items should be unused and in their original packaging where possible. Refunds or exchanges are arranged directly with the seller, because checkout here is a seller-contact flow, not an automatic payment.'
+                  : 'Privacy: your name, phone, email and address are used only to fulfil your order and to contact you about it. Your order details are stored in the store database. We do not sell your personal data.'}
+            </p>
+            <button type="button" onClick={() => setInfoModal(null)} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm mt-6">Close</button>
+          </div>
+        </div>
+      )}
 
       {/* Shopping cart rendered through a portal */}
       {isCartOpen && createPortal(
@@ -881,7 +1078,7 @@ export default function App() {
               ) : (
                 cart.map(item => (
                   <div key={item.id || item.name} className="py-4 flex items-center space-x-4">
-                    <img src={item.image} alt={item.name || ''} className="w-16 h-16 object-cover rounded-xl border border-slate-100" />
+                    <img src={item.image} alt={item.name || ''} onError={handleImageError} className="w-16 h-16 object-cover rounded-xl border border-slate-100" />
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-semibold break-words">{item.name}</h4>
                       <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>RM {Number(item.price).toFixed(2)}</p>
@@ -904,7 +1101,7 @@ export default function App() {
                   <span>RM {cartSubtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-slate-600">
-                  <span>Shipping (Free above RM 300, otherwise RM 10)</span>
+                  <span>{`Shipping (Free above RM ${FREE_SHIPPING_THRESHOLD}, otherwise RM ${FLAT_SHIPPING_FEE.toFixed(2)})`}</span>
                   <span>{shippingCost === 0 ? 'Free' : `RM ${shippingCost.toFixed(2)}`}</span>
                 </div>
                 <div className="flex justify-between text-sm text-slate-600">
@@ -917,7 +1114,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setIsCartOpen(false); setCheckoutStep('shipping'); }}
+                  onClick={() => { setIsCartOpen(false); setTermsAccepted(false); setCheckoutStep('shipping'); }}
                   className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90"
                   style={{ backgroundColor: siteSettings.primary_color }}
                 >
@@ -930,9 +1127,9 @@ export default function App() {
         document.body
       )}
 
-      {/* Product detail modal */}
+      {/* Product detail modal: previously selectedProduct was set but never rendered */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800" onClick={(e) => { if (e.target === e.currentTarget) setSelectedProduct(null); }}>
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               type="button"
@@ -942,7 +1139,7 @@ export default function App() {
             >
               <X className="w-5 h-5" />
             </button>
-            <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-72 object-cover rounded-2xl border border-slate-100" />
+            <img src={selectedProduct.image} alt={selectedProduct.name} onError={handleImageError} className="w-full h-72 object-cover rounded-2xl border border-slate-100" />
             <p className="text-xs font-semibold text-indigo-600 mt-5">{selectedProduct.category}</p>
             <h2 className="text-2xl font-extrabold text-slate-900 mt-1">{selectedProduct.name}</h2>
             <p className="text-xl font-bold text-slate-900 mt-2">RM {parseFloat(selectedProduct.price).toFixed(2)}</p>
@@ -960,10 +1157,16 @@ export default function App() {
             <p className="text-sm text-slate-700 leading-relaxed mt-4 whitespace-pre-line">
               {selectedProduct.description}
             </p>
+            <div className="flex items-center gap-3 mt-6">
+              <span className="text-sm font-semibold text-slate-700">Quantity</span>
+              <button type="button" aria-label="Decrease quantity" onClick={() => setDetailQuantity((q) => Math.max(1, q - 1))} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Minus className="w-4 h-4" /></button>
+              <span className="text-sm font-bold min-w-6 text-center">{detailQuantity}</span>
+              <button type="button" aria-label="Increase quantity" onClick={() => setDetailQuantity((q) => q + 1)} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200"><Plus className="w-4 h-4" /></button>
+            </div>
             <button
               type="button"
-              onClick={() => { addToCart(selectedProduct); setSelectedProduct(null); }}
-              className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90 mt-6"
+              onClick={() => { addToCart(selectedProduct, detailQuantity); setSelectedProduct(null); }}
+              className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90 mt-4"
               style={{ backgroundColor: siteSettings.primary_color }}
             >
               Add to Cart
@@ -1014,6 +1217,11 @@ export default function App() {
                   <input required placeholder="City" value={shippingInfo.city} onChange={e => setShippingInfo({...shippingInfo, city: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                   <input required placeholder="Zip Code" value={shippingInfo.zipCode} onChange={e => setShippingInfo({...shippingInfo, zipCode: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
                 </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-600">
+                  <input type="checkbox" required checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-0.5" />
+                  <span>I agree to the store&apos;s shipping and returns terms.</span>
+                </label>
 
                 <button type="submit" className="w-full text-white font-bold py-3.5 rounded-xl transition-all hover:opacity-90 shadow-md" style={{ backgroundColor: siteSettings.primary_color }}>
                   Confirm Order &amp; Contact Seller
