@@ -39,7 +39,8 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false); // 切换“前台网店”与“商家后台”
+  const searchParams = new URLSearchParams(window.location.search);
+  const [isAdmin, setIsAdmin] = useState(searchParams.get('admin') === 'true');
 
   // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
@@ -434,17 +435,6 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
-              {/* 后台入口按钮 */}
-              <button
-                onClick={() => {
-                  setIsAdmin(true);
-                  fetchOrders();
-                }}
-                className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
-              >
-                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-                <span>商家后台</span>
-              </button>
 
               {/* Cart Icon */}
               <button
