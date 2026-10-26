@@ -35,7 +35,7 @@ const CATEGORIES = [
 ];
 
 export default function App() {
-  // --- 智能识别是否为 Admin 后台域名或带参数访问 ---
+  // 检查当前域名或参数是否属于 Admin 环境
   const isAdminEnvironment = useMemo(() => {
     const hostname = window.location.hostname;
     const searchParams = new URLSearchParams(window.location.search);
@@ -46,7 +46,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(isAdminEnvironment);
+  const [isAdmin, setIsAdmin] = useState(false); // 默认显示前台，点击按钮后切换
 
   // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,7 +85,7 @@ export default function App() {
     }
   }, [isAdmin]);
 
-  // 1. 从 Supabase 读取商品 (去掉约束，防止400错误)
+  // 1. 从 Supabase 读取商品
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('products').select('*');
@@ -224,7 +224,7 @@ export default function App() {
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
-  // ==================== 商家管理后台界面 (Admin Website) ====================
+  // ==================== 商家管理后台界面 (Admin Portal View) ====================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-6 md:p-10">
@@ -239,18 +239,13 @@ export default function App() {
               <p className="text-xs text-slate-500 mt-1">云端实时数据控制中心 (Supabase Enterprise Managed)</p>
             </div>
             
-            {/* 仅在通过临时参数访问时显示返回按钮 */}
-            {new URLSearchParams(window.location.search).get('admin') === 'true' && (
-              <button
-                onClick={() => {
-                  window.location.href = window.location.pathname;
-                }}
-                className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow transition-all self-start md:self-auto"
-              >
-                <Store className="w-4 h-4" />
-                <span>退出后台</span>
-              </button>
-            )}
+            <button
+              onClick={() => setIsAdmin(false)}
+              className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow transition-all self-start md:self-auto"
+            >
+              <Store className="w-4 h-4" />
+              <span>返回网店前台</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -402,7 +397,7 @@ export default function App() {
     );
   }
 
-  // ==================== 前台网店界面 (Public Store Website) ====================
+  // ==================== 前台网店界面 (Public Store View) ====================
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased flex flex-col selection:bg-indigo-500 selection:text-white">
       
@@ -448,6 +443,20 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
+              {/* 重点：仅在属于 Admin 网址/环境时才渲染“商家后台”按钮 */}
+              {isAdminEnvironment && (
+                <button
+                  onClick={() => {
+                    setIsAdmin(true);
+                    fetchOrders();
+                  }}
+                  className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>商家后台</span>
+                </button>
+              )}
+
               {/* Cart Icon */}
               <button
                 onClick={() => setIsCartOpen(true)}
