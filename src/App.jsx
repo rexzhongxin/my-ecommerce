@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 // --- MOCK PRODUCT DATA ---
-const INITIAL_PRODUCTS = [
+const PRODUCTS = [
   {
     id: 1,
     name: "Sony WH-1000XM5 无线降噪耳机",
