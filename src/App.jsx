@@ -43,9 +43,8 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false); // 控制前台调色浮窗开关
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // 店面外观与色彩设置状态
   const [siteSettings, setSiteSettings] = useState({
     store_name: 'NexusMarket',
     store_logo: '',
@@ -57,24 +56,20 @@ export default function App() {
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
   
-  // 交互状态
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [checkoutStep, setCheckoutStep] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // 新增商品表单状态
   const [newProduct, setNewProduct] = useState({
     name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true
   });
 
-  // 结账表单状态
   const [shippingInfo, setShippingInfo] = useState({ fullName: '', email: '', address: '', city: '', zipCode: '' });
   const [paymentInfo, setPaymentInfo] = useState({ cardNumber: '', cardName: '', expiry: '', cvv: '' });
 
@@ -118,7 +113,6 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 保存色彩与外观设置到 Supabase
   const handleSaveSettings = async (e) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
@@ -128,7 +122,7 @@ export default function App() {
 
     setSavingSettings(false);
     if (!error) {
-      showToast('配色已成功同步保存至云端数据库！');
+      showToast('配色与设置已成功写入数据库！');
     } else {
       showToast('保存失败：' + error.message);
     }
@@ -240,7 +234,7 @@ export default function App() {
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
-  // ==================== 商家管理后台界面 (Admin Backstage Portal) ====================
+  // ==================== 商家管理后台界面 (Admin Backstage) ====================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-6 md:p-10">
@@ -263,7 +257,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* 后台文本与主题面板 */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
               <Settings className="w-5 h-5 text-indigo-600" /> 店面品牌与文本配置
@@ -431,7 +424,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 🌟🌟🌟 Admin 专属前台“实时调色”悬浮卡片 🌟🌟🌟 */}
+      {/* Admin 专属前台“实时调色”悬浮卡片 */}
       {isAdminEnvironment && (
         <div className="fixed bottom-6 right-6 z-50">
           {!showColorPicker ? (
@@ -583,28 +576,28 @@ export default function App() {
         </div>
       </header>
 
-{/* --- HERO BANNER (已绑定主色调动态渐变) --- */}
-<section 
-  className="text-white relative overflow-hidden transition-all duration-300"
-  style={{ 
-    background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)` 
-  }}
->
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
-    <div className="max-w-xl text-center md:text-left">
-      <span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
-        <Sparkles className="w-3.5 h-3.5" />
-        <span>Cloud Database Powered</span>
-      </span>
-      <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-        {siteSettings.hero_title}
-      </h1>
-      <p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
-        {siteSettings.hero_subtitle}
-      </p>
-    </div>
-  </div>
-</section>
+      {/* --- HERO BANNER (已绑定主色调动态渐变) --- */}
+      <section 
+        className="text-white relative overflow-hidden transition-all duration-300"
+        style={{ 
+          background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)` 
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
+          <div className="max-w-xl text-center md:text-left">
+            <span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Cloud Database Powered</span>
+            </span>
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
+              {siteSettings.hero_title}
+            </h1>
+            <p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
+              {siteSettings.hero_subtitle}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* --- MAIN CATALOG --- */}
       <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
@@ -667,14 +660,34 @@ export default function App() {
                         <span>{product.rating || 5.0}</span>
                         <span className="text-slate-400">({product.reviews || 0})</span>
                       </div>
-                      <h3 onClick={() => setSelectedProduct(product)} className="mt-2 text-base font-bold text-slate-800 cursor-pointer line-clamp-1">
+                      
+                      {/* 🌟 绑定文字颜色设置 */}
+                      <h3 
+                        onClick={() => setSelectedProduct(product)} 
+                        className="mt-2 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
+                        style={{ color: siteSettings.text_color }}
+                      >
                         {product.name}
                       </h3>
-                      <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">{product.description}</p>
+                      
+                      {/* 🌟 描述文本响应文字颜色设置 */}
+                      <p 
+                        className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
+                        style={{ color: siteSettings.text_color }}
+                      >
+                        {product.description}
+                      </p>
                     </div>
 
                     <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
-                      <span className="text-lg font-bold text-slate-900">${parseFloat(product.price).toFixed(2)}</span>
+                      {/* 🌟 价格数字响应文字颜色设置 */}
+                      <span 
+                        className="text-lg font-bold"
+                        style={{ color: siteSettings.text_color }}
+                      >
+                        ${parseFloat(product.price).toFixed(2)}
+                      </span>
+
                       <button 
                         onClick={() => addToCart(product)} 
                         className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90"
