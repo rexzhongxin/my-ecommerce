@@ -25,7 +25,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Settings,
-  Save
+  Save,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -50,9 +51,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 店面外观设置状态
+  // 店面外观设置状态（包含 store_logo）
   const [siteSettings, setSiteSettings] = useState({
     store_name: 'NexusMarket',
+    store_logo: '',
     hero_title: 'Elevate Your Everyday Essentials.',
     hero_subtitle: 'Discover premium curated electronics, modern home accents, and stylish apparel delivered directly to your door.'
   });
@@ -113,12 +115,13 @@ export default function App() {
     }
   };
 
-  // 3. 读取店面外观设置
+  // 3. 读取店面外观与 Logo 设置
   const fetchSettings = async () => {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
     if (!error && data) {
       setSiteSettings({
         store_name: data.store_name || 'NexusMarket',
+        store_logo: data.store_logo || '',
         hero_title: data.hero_title || 'Elevate Your Everyday Essentials.',
         hero_subtitle: data.hero_subtitle || 'Discover premium curated electronics...'
       });
@@ -130,7 +133,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // --- 后台操作：保存店面外观设置 ---
+  // --- 后台操作：保存店面外观与 Logo ---
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setSavingSettings(true);
@@ -140,7 +143,7 @@ export default function App() {
 
     setSavingSettings(false);
     if (!error) {
-      showToast('店面外观设置保存成功！已同步至前台');
+      showToast('店面 Logo 与外观设置保存成功！已同步至前台');
     } else {
       showToast('保存失败：' + error.message);
     }
@@ -283,12 +286,12 @@ export default function App() {
             </button>
           </div>
 
-          {/* 🌟 新增：店面外观与品牌设置面板 */}
+          {/* 店面外观与 Logo 图标设置面板 */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-indigo-600" /> 更改店面外观与品牌设置
+              <Settings className="w-5 h-5 text-indigo-600" /> 更改店面 Logo 与品牌外观
             </h2>
-            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">店铺名称 (Store Name)</label>
                 <input
@@ -298,6 +301,18 @@ export default function App() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">店铺 Logo 图标网址 (URL)</label>
+                <input
+                  type="text"
+                  placeholder="留空则显示默认购物袋图标，例如: https://..."
+                  value={siteSettings.store_logo}
+                  onChange={e => setSiteSettings({ ...siteSettings, store_logo: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">首页大标题 (Hero Title)</label>
                 <input
@@ -307,6 +322,7 @@ export default function App() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">首页宣传副标题 (Hero Subtitle)</label>
                 <input
@@ -316,14 +332,15 @@ export default function App() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
-              <div className="md:col-span-3 flex justify-end">
+
+              <div className="md:col-span-2 flex justify-end">
                 <button
                   type="submit"
                   disabled={savingSettings}
                   className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow transition-all"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{savingSettings ? '保存中...' : '保存店面修改'}</span>
+                  <span>{savingSettings ? '保存中...' : '保存 Logo 与外观设置'}</span>
                 </button>
               </div>
             </form>
@@ -495,11 +512,15 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             
-            {/* 动态 Logo 与 店铺名称 */}
+            {/* 动态 Logo 图标与店铺名称 */}
             <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-                <ShoppingBag className="w-6 h-6 text-white" />
-              </div>
+              {siteSettings.store_logo ? (
+                <img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
+              ) : (
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                  <ShoppingBag className="w-6 h-6 text-white" />
+                </div>
+              )}
               <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tight">
                 {siteSettings.store_name}
               </span>
@@ -524,7 +545,6 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
-              {/* 仅在属于 Admin 网址/环境时才渲染“商家后台”按钮 */}
               {isAdminEnvironment && (
                 <button
                   onClick={() => {
@@ -540,7 +560,7 @@ export default function App() {
 
               {/* Cart Icon */}
               <button
-                onClick={() => setIsCartOpen(true)}
+                onClick={() => setIsCartOpen(false ? null : true)}
                 className="relative flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow-md transition-all"
               >
                 <ShoppingCart className="w-4 h-4" />
@@ -556,7 +576,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* --- 动态 HERO BANNER --- */}
+      {/* --- HERO BANNER --- */}
       <section className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
           <div className="max-w-xl text-center md:text-left">
