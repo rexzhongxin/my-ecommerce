@@ -3,20 +3,14 @@ import { supabase } from './supabaseClient';
 import { 
   ShoppingBag, 
   Search, 
-  Heart, 
   ShoppingCart, 
   X, 
   Plus, 
   Minus, 
   Trash2, 
   Star, 
-  ArrowRight, 
-  CreditCard, 
-  ShieldCheck, 
-  Truck, 
   RefreshCw, 
   SlidersHorizontal,
-  Eye,
   Sparkles,
   Package,
   CheckCircle2,
@@ -26,7 +20,7 @@ import {
   ToggleRight,
   Settings,
   Save,
-  Image as ImageIcon
+  Palette
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -38,7 +32,6 @@ const CATEGORIES = [
 ];
 
 export default function App() {
-  // 检查当前域名或参数是否属于 Admin 环境
   const isAdminEnvironment = useMemo(() => {
     const hostname = window.location.hostname;
     const searchParams = new URLSearchParams(window.location.search);
@@ -51,12 +44,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 店面外观设置状态（包含 store_logo）
+  // 店面外观与色彩设置状态
   const [siteSettings, setSiteSettings] = useState({
     store_name: 'NexusMarket',
     store_logo: '',
     hero_title: 'Elevate Your Everyday Essentials.',
-    hero_subtitle: 'Discover premium curated electronics, modern home accents, and stylish apparel delivered directly to your door.'
+    hero_subtitle: 'Discover premium curated electronics, modern home accents, and stylish apparel delivered directly to your door.',
+    primary_color: '#4f46e5', // 默认主色调（靛蓝色）
+    text_color: '#1e293b',    // 默认文字颜色
+    bg_color: '#f8fafc'       // 默认背景颜色
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -88,7 +84,6 @@ export default function App() {
   const [shippingInfo, setShippingInfo] = useState({ fullName: '', email: '', address: '', city: '', zipCode: '' });
   const [paymentInfo, setPaymentInfo] = useState({ cardNumber: '', cardName: '', expiry: '', cvv: '' });
 
-  // 页面加载时拉取数据
   useEffect(() => {
     fetchProducts();
     fetchSettings();
@@ -97,7 +92,6 @@ export default function App() {
     }
   }, [isAdmin]);
 
-  // 1. 读取商品
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('products').select('*');
@@ -107,7 +101,6 @@ export default function App() {
     setLoading(false);
   };
 
-  // 2. 读取订单
   const fetchOrders = async () => {
     const { data, error } = await supabase.from('orders').select('*');
     if (!error && data) {
@@ -115,7 +108,6 @@ export default function App() {
     }
   };
 
-  // 3. 读取店面外观与 Logo 设置
   const fetchSettings = async () => {
     const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
     if (!error && data) {
@@ -123,7 +115,10 @@ export default function App() {
         store_name: data.store_name || 'NexusMarket',
         store_logo: data.store_logo || '',
         hero_title: data.hero_title || 'Elevate Your Everyday Essentials.',
-        hero_subtitle: data.hero_subtitle || 'Discover premium curated electronics...'
+        hero_subtitle: data.hero_subtitle || 'Discover premium curated electronics...',
+        primary_color: data.primary_color || '#4f46e5',
+        text_color: data.text_color || '#1e293b',
+        bg_color: data.bg_color || '#f8fafc'
       });
     }
   };
@@ -133,7 +128,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // --- 后台操作：保存店面外观与 Logo ---
+  // 保存店面外观与色彩
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     setSavingSettings(true);
@@ -143,13 +138,12 @@ export default function App() {
 
     setSavingSettings(false);
     if (!error) {
-      showToast('店面 Logo 与外观设置保存成功！已同步至前台');
+      showToast('店面色彩与外观设置保存成功！已同步至前台');
     } else {
       showToast('保存失败：' + error.message);
     }
   };
 
-  // --- 后台操作：新增商品 ---
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.price || !newProduct.image) {
@@ -179,7 +173,6 @@ export default function App() {
     }
   };
 
-  // --- 后台操作：上下架 ---
   const toggleProductActive = async (id, currentStatus) => {
     const { error } = await supabase.from('products').update({ is_active: !currentStatus }).eq('id', id);
     if (!error) {
@@ -188,7 +181,6 @@ export default function App() {
     }
   };
 
-  // --- 购物车及订单 logic ---
   const addToCart = (product, quantity = 1) => {
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
@@ -286,61 +278,110 @@ export default function App() {
             </button>
           </div>
 
-          {/* 店面外观与 Logo 图标设置面板 */}
+          {/* 🌟 品牌定制与色彩调控控制面板 */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-indigo-600" /> 更改店面 Logo 与品牌外观
+              <Palette className="w-5 h-5 text-indigo-600" /> 更改店面文字、Logo 与主题色彩
             </h2>
-            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">店铺名称 (Store Name)</label>
-                <input
-                  type="text"
-                  value={siteSettings.store_name}
-                  onChange={e => setSiteSettings({ ...siteSettings, store_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+            <form onSubmit={handleSaveSettings} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">店铺名称 (Store Name)</label>
+                  <input
+                    type="text"
+                    value={siteSettings.store_name}
+                    onChange={e => setSiteSettings({ ...siteSettings, store_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">店铺 Logo 图标网址 (URL)</label>
+                  <input
+                    type="text"
+                    placeholder="https://..."
+                    value={siteSettings.store_logo}
+                    onChange={e => setSiteSettings({ ...siteSettings, store_logo: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">首页大标题 (Hero Title)</label>
+                  <input
+                    type="text"
+                    value={siteSettings.hero_title}
+                    onChange={e => setSiteSettings({ ...siteSettings, hero_title: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">首页宣传副标题 (Hero Subtitle)</label>
+                  <input
+                    type="text"
+                    value={siteSettings.hero_subtitle}
+                    onChange={e => setSiteSettings({ ...siteSettings, hero_subtitle: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">店铺 Logo 图标网址 (URL)</label>
-                <input
-                  type="text"
-                  placeholder="留空则显示默认购物袋图标，例如: https://..."
-                  value={siteSettings.store_logo}
-                  onChange={e => setSiteSettings({ ...siteSettings, store_logo: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+              {/* 🎨 自由选色器卡片 */}
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+                  <Palette className="w-4 h-4 text-indigo-500" /> 前台配色控制 (点击选择调色板)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input 
+                      type="color" 
+                      value={siteSettings.primary_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, primary_color: e.target.value })}
+                      className="w-9 h-9 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700">主色调 (Primary Color)</label>
+                      <span className="text-[10px] text-slate-400 uppercase">{siteSettings.primary_color}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input 
+                      type="color" 
+                      value={siteSettings.text_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, text_color: e.target.value })}
+                      className="w-9 h-9 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700">全局文字颜色 (Text Color)</label>
+                      <span className="text-[10px] text-slate-400 uppercase">{siteSettings.text_color}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input 
+                      type="color" 
+                      value={siteSettings.bg_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, bg_color: e.target.value })}
+                      className="w-9 h-9 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700">网页背景色 (Background)</label>
+                      <span className="text-[10px] text-slate-400 uppercase">{siteSettings.bg_color}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">首页大标题 (Hero Title)</label>
-                <input
-                  type="text"
-                  value={siteSettings.hero_title}
-                  onChange={e => setSiteSettings({ ...siteSettings, hero_title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">首页宣传副标题 (Hero Subtitle)</label>
-                <input
-                  type="text"
-                  value={siteSettings.hero_subtitle}
-                  onChange={e => setSiteSettings({ ...siteSettings, hero_subtitle: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-
-              <div className="md:col-span-2 flex justify-end">
+              <div className="flex justify-end pt-2">
                 <button
                   type="submit"
                   disabled={savingSettings}
                   className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow transition-all"
                 >
                   <Save className="w-4 h-4" />
-                  <span>{savingSettings ? '保存中...' : '保存 Logo 与外观设置'}</span>
+                  <span>{savingSettings ? '保存中...' : '保存全新外观与色彩'}</span>
                 </button>
               </div>
             </form>
@@ -497,7 +538,10 @@ export default function App() {
 
   // ==================== 前台网店界面 (Public Store View) ====================
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased flex flex-col selection:bg-indigo-500 selection:text-white">
+    <div 
+      className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300"
+      style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color }}
+    >
       
       {/* Toast Notification */}
       {toastMessage && (
@@ -512,16 +556,22 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             
-            {/* 动态 Logo 图标与店铺名称 */}
+            {/* 动态 Logo 图标与自定义主色调店铺名 */}
             <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
               {siteSettings.store_logo ? (
                 <img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
               ) : (
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                  style={{ backgroundColor: siteSettings.primary_color }}
+                >
                   <ShoppingBag className="w-6 h-6 text-white" />
                 </div>
               )}
-              <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tight">
+              <span 
+                className="text-2xl font-bold tracking-tight"
+                style={{ color: siteSettings.primary_color }}
+              >
                 {siteSettings.store_name}
               </span>
             </div>
@@ -533,7 +583,7 @@ export default function App() {
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-sm"
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
               />
               <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
               {searchQuery && (
@@ -558,15 +608,16 @@ export default function App() {
                 </button>
               )}
 
-              {/* Cart Icon */}
+              {/* Cart Icon (应用主色调) */}
               <button
-                onClick={() => setIsCartOpen(false ? null : true)}
-                className="relative flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow-md transition-all"
+                onClick={() => setIsCartOpen(true)}
+                className="relative flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90"
+                style={{ backgroundColor: siteSettings.primary_color }}
               >
                 <ShoppingCart className="w-4 h-4" />
                 <span className="font-semibold text-sm hidden sm:inline">Cart</span>
                 {totalCartItemsCount > 0 && (
-                  <span className="bg-white text-indigo-700 font-bold text-xs px-2 py-0.5 rounded-full">
+                  <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full" style={{ color: siteSettings.primary_color }}>
                     {totalCartItemsCount}
                   </span>
                 )}
@@ -577,10 +628,10 @@ export default function App() {
       </header>
 
       {/* --- HERO BANNER --- */}
-      <section className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white relative overflow-hidden">
+      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
           <div className="max-w-xl text-center md:text-left">
-            <span className="inline-flex items-center space-x-2 bg-indigo-500/20 text-indigo-300 text-xs font-semibold px-3 py-1 rounded-full border border-indigo-400/30 mb-4">
+            <span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Cloud Database Powered</span>
             </span>
@@ -596,7 +647,7 @@ export default function App() {
 
       {/* --- MAIN CATALOG --- */}
       <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {CATEGORIES.map(cat => (
               <button
@@ -604,9 +655,10 @@ export default function App() {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                   selectedCategory === cat.id
-                    ? 'bg-indigo-600 text-white shadow-md'
+                    ? 'text-white shadow-md'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                 }`}
+                style={{ backgroundColor: selectedCategory === cat.id ? siteSettings.primary_color : undefined }}
               >
                 {cat.name}
               </button>
@@ -632,8 +684,8 @@ export default function App() {
         <div className="mt-8">
           {loading ? (
             <div className="text-center py-20">
-              <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
-              <p className="text-sm text-slate-500 font-medium">正在加载云端商品...</p>
+              <RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color }} />
+              <p className="text-sm opacity-70 font-medium">正在加载云端商品...</p>
             </div>
           ) : displayedProducts.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
@@ -658,7 +710,7 @@ export default function App() {
                         <span>{product.rating || 5.0}</span>
                         <span className="text-slate-400">({product.reviews || 0})</span>
                       </div>
-                      <h3 onClick={() => setSelectedProduct(product)} className="mt-2 text-base font-bold text-slate-800 hover:text-indigo-600 cursor-pointer line-clamp-1">
+                      <h3 onClick={() => setSelectedProduct(product)} className="mt-2 text-base font-bold text-slate-800 hover:opacity-80 cursor-pointer line-clamp-1">
                         {product.name}
                       </h3>
                       <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">{product.description}</p>
@@ -666,7 +718,11 @@ export default function App() {
 
                     <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
                       <span className="text-lg font-bold text-slate-900">${parseFloat(product.price).toFixed(2)}</span>
-                      <button onClick={() => addToCart(product)} className="p-2.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl shadow-md">
+                      <button 
+                        onClick={() => addToCart(product)} 
+                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90"
+                        style={{ backgroundColor: siteSettings.primary_color }}
+                      >
                         <ShoppingCart className="w-4 h-4" />
                       </button>
                     </div>
@@ -683,7 +739,7 @@ export default function App() {
         <div className="fixed inset-0 z-50 overflow-hidden">
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <h2 className="text-lg font-bold text-slate-900">Your Shopping Cart</h2>
                 <button onClick={() => setIsCartOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
@@ -698,7 +754,7 @@ export default function App() {
                       <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl" />
                       <div className="flex-1">
                         <h4 className="text-sm font-semibold">{item.name}</h4>
-                        <p className="text-xs font-bold text-indigo-600">${item.price}</p>
+                        <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>${item.price}</p>
                         <div className="flex items-center space-x-2 mt-2">
                           <button onClick={() => updateQuantity(item.id, -1)} className="p-1 bg-slate-100 rounded"><Minus className="w-3 h-3" /></button>
                           <span className="text-xs font-bold">{item.quantity}</span>
@@ -719,7 +775,8 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => { setIsCartOpen(false); setCheckoutStep('shipping'); }}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg"
+                    className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90"
+                    style={{ backgroundColor: siteSettings.primary_color }}
                   >
                     Proceed to Checkout
                   </button>
@@ -732,7 +789,7 @@ export default function App() {
 
       {/* --- CHECKOUT MODAL FLOW --- */}
       {checkoutStep && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative">
             <button onClick={() => setCheckoutStep(null)} className="absolute top-6 right-6 text-slate-400"><X className="w-5 h-5" /></button>
 
@@ -742,7 +799,7 @@ export default function App() {
                 <input required placeholder="Full Name" value={shippingInfo.fullName} onChange={e => setShippingInfo({...shippingInfo, fullName: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm" />
                 <input required placeholder="Email Address" type="email" value={shippingInfo.email} onChange={e => setShippingInfo({...shippingInfo, email: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm" />
                 <input required placeholder="Street Address" value={shippingInfo.address} onChange={e => setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm" />
-                <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl">Continue to Payment</button>
+                <button type="submit" className="w-full text-white font-bold py-3 rounded-xl transition-all hover:opacity-90" style={{ backgroundColor: siteSettings.primary_color }}>Continue to Payment</button>
               </form>
             )}
 
@@ -751,13 +808,13 @@ export default function App() {
                 <h2 className="text-xl font-bold">Payment Information</h2>
                 <input required placeholder="Cardholder Name" value={paymentInfo.cardName} onChange={e => setPaymentInfo({...paymentInfo, cardName: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm" />
                 <input required placeholder="Card Number" value={paymentInfo.cardNumber} onChange={e => setPaymentInfo({...paymentInfo, cardNumber: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl text-sm" />
-                <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl">Pay ${cartTotal.toFixed(2)}</button>
+                <button type="submit" className="w-full text-white font-bold py-3 rounded-xl transition-all hover:opacity-90" style={{ backgroundColor: siteSettings.primary_color }}>Pay ${cartTotal.toFixed(2)}</button>
               </form>
             )}
 
             {checkoutStep === 'processing' && (
               <div className="text-center py-12 space-y-3">
-                <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto" />
+                <RefreshCw className="w-10 h-10 animate-spin mx-auto" style={{ color: siteSettings.primary_color }} />
                 <p className="font-bold">Submitting order to Supabase...</p>
               </div>
             )}
