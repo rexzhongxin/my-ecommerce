@@ -35,12 +35,18 @@ const CATEGORIES = [
 ];
 
 export default function App() {
+  // --- 智能识别是否为 Admin 后台域名或带参数访问 ---
+  const isAdminEnvironment = useMemo(() => {
+    const hostname = window.location.hostname;
+    const searchParams = new URLSearchParams(window.location.search);
+    return hostname.includes('admin') || searchParams.get('admin') === 'true';
+  }, []);
+
   // --- STATE ---
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const searchParams = new URLSearchParams(window.location.search);
-  const [isAdmin, setIsAdmin] = useState(searchParams.get('admin') === 'true');
+  const [isAdmin, setIsAdmin] = useState(isAdminEnvironment);
 
   // 搜索与筛选
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,12 +77,15 @@ export default function App() {
   const [shippingInfo, setShippingInfo] = useState({ fullName: '', email: '', address: '', city: '', zipCode: '' });
   const [paymentInfo, setPaymentInfo] = useState({ cardNumber: '', cardName: '', expiry: '', cvv: '' });
 
-  // 页面加载时拉取商品
+  // 页面加载时拉取数据
   useEffect(() => {
     fetchProducts();
-  }, []);
+    if (isAdmin) {
+      fetchOrders();
+    }
+  }, [isAdmin]);
 
-  // 1. 从 Supabase 读取所有商品
+  // 1. 从 Supabase 读取商品 (去掉约束，防止400错误)
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('products').select('*');
@@ -86,7 +95,7 @@ export default function App() {
     setLoading(false);
   };
 
-  // 2. 从 Supabase 读取订单（进入后台时触发）
+  // 2. 从 Supabase 读取订单
   const fetchOrders = async () => {
     const { data, error } = await supabase.from('orders').select('*');
     if (!error && data) {
@@ -123,7 +132,7 @@ export default function App() {
     if (!error) {
       showToast(`商品 "${newProduct.name}" 已成功发布到云端！`);
       setNewProduct({ name: '', category: 'Electronics', price: '', image: '', description: '', rating: 5.0, reviews: 10, is_active: true });
-      fetchProducts(); // 刷新本地商品列表
+      fetchProducts(); 
     } else {
       showToast('发布失败：' + error.message);
     }
@@ -165,12 +174,11 @@ export default function App() {
     showToast('Item removed from cart.');
   };
 
-  // --- 模拟结算并真正写入 Supabase orders 表 ---
+  // --- 提交订单写入 Supabase ---
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     setCheckoutStep('processing');
 
-    // 将订单提交到 Supabase orders 表
     const { error } = await supabase.from('orders').insert([
       {
         customer_name: shippingInfo.fullName,
@@ -198,11 +206,10 @@ export default function App() {
   const cartTotal = cartSubtotal + shippingCost + taxCost;
   const totalCartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // 过滤出要在前台显示的商品（过滤下架商品）
+  // 过滤出前台展示商品
   const displayedProducts = useMemo(() => {
     return products
       .filter(p => {
-        // 前台默认只展示 is_active 不为 false 的商品
         const isActive = p.is_active !== false; 
         const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
         const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -213,11 +220,11 @@ export default function App() {
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
         if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
-        return 0;
+        return (a.id || 0) - (b.id || 0);
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
-  // ==================== 商家管理后台界面 ====================
+  // ==================== 商家管理后台界面 (Admin Website) ====================
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 font-sans text-slate-800 p-6 md:p-10">
@@ -229,15 +236,21 @@ export default function App() {
                 <LayoutDashboard className="w-6 h-6" />
                 <span className="text-xl">NexusMarket 商家管理后台</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">云端实时数据控制面板 (Supabase Connected)</p>
+              <p className="text-xs text-slate-500 mt-1">云端实时数据控制中心 (Supabase Enterprise Managed)</p>
             </div>
-            <button
-              onClick={() => setIsAdmin(false)}
-              className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow transition-all self-start md:self-auto"
-            >
-              <Store className="w-4 h-4" />
-              <span>返回网店前台</span>
-            </button>
+            
+            {/* 仅在通过临时参数访问时显示返回按钮 */}
+            {new URLSearchParams(window.location.search).get('admin') === 'true' && (
+              <button
+                onClick={() => {
+                  window.location.href = window.location.pathname;
+                }}
+                className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow transition-all self-start md:self-auto"
+              >
+                <Store className="w-4 h-4" />
+                <span>退出后台</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -389,7 +402,7 @@ export default function App() {
     );
   }
 
-  // ==================== 前台网店界面 ====================
+  // ==================== 前台网店界面 (Public Store Website) ====================
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased flex flex-col selection:bg-indigo-500 selection:text-white">
       
@@ -435,7 +448,6 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center space-x-3">
-
               {/* Cart Icon */}
               <button
                 onClick={() => setIsCartOpen(true)}
@@ -474,7 +486,6 @@ export default function App() {
 
       {/* --- MAIN CATALOG --- */}
       <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
-        {/* Category Pills & Filters */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200">
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {CATEGORIES.map(cat => (
@@ -512,13 +523,12 @@ export default function App() {
           {loading ? (
             <div className="text-center py-20">
               <RefreshCw className="w-10 h-10 text-indigo-600 animate-spin mx-auto mb-3" />
-              <p className="text-sm text-slate-500 font-medium">正在加载 Supabase 云端商品数据...</p>
+              <p className="text-sm text-slate-500 font-medium">正在加载云端商品...</p>
             </div>
           ) : displayedProducts.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
               <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-slate-700">No active products found</h3>
-              <p className="text-slate-500 text-sm mt-1">请点击右上角“商家后台”添加或上架商品。</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
@@ -645,8 +655,8 @@ export default function App() {
             {checkoutStep === 'success' && (
               <div className="text-center py-8 space-y-4">
                 <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
-                <h2 className="text-2xl font-bold">Order Saved to Database!</h2>
-                <p className="text-xs text-slate-500">你的订单已实时同步写入 Supabase 数据库 `orders` 表。你可以在“商家后台”查看到这张订单。</p>
+                <h2 className="text-2xl font-bold">Order Confirmed!</h2>
+                <p className="text-xs text-slate-500">Thank you for your purchase. Your order has been placed successfully.</p>
                 <button onClick={() => setCheckoutStep(null)} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl">Continue Shopping</button>
               </div>
             )}
