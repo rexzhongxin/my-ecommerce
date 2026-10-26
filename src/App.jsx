@@ -168,7 +168,6 @@ export default function App() {
     }
   };
 
-  // 🌟 修复后的 addToCart 函数
   const addToCart = (product, quantity = 1) => {
     setCart(prevCart => {
       const existing = prevCart.find(item => item.id === product.id);
@@ -426,7 +425,7 @@ export default function App() {
   // ==================== 前台网店界面 (Public Store View) ====================
   return (
     <div 
-      className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300"
+      className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
       style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color }}
     >
       
@@ -529,8 +528,8 @@ export default function App() {
         </div>
       )}
 
-      {/* --- NAVBAR --- */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200">
+      {/* --- NAVBAR (提升层级至 z-50 确保绝对可点击) --- */}
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             
@@ -561,7 +560,7 @@ export default function App() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 relative z-50">
               {isAdminEnvironment && (
                 <button
                   type="button"
@@ -573,24 +572,29 @@ export default function App() {
                 </button>
               )}
 
-              {/* 🌟 强化后的 Cart 按钮，确保可点击 */}
-              <button
-                type="button"
+              {/* 🌟 强效防止事件穿透截获的 Header Cart 按钮 */}
+              <div 
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   setIsCartOpen(true);
                 }}
-                className="relative flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer z-40"
-                style={{ backgroundColor: siteSettings.primary_color }}
+                className="inline-block cursor-pointer select-none"
               >
-                <ShoppingCart className="w-4 h-4 pointer-events-none" />
-                <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
-                {totalCartItemsCount > 0 && (
-                  <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
-                    {totalCartItemsCount}
-                  </span>
-                )}
-              </button>
+                <button
+                  type="button"
+                  className="relative flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 pointer-events-auto"
+                  style={{ backgroundColor: siteSettings.primary_color }}
+                >
+                  <ShoppingCart className="w-4 h-4 pointer-events-none" />
+                  <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
+                  {totalCartItemsCount > 0 && (
+                    <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
+                      {totalCartItemsCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -706,7 +710,7 @@ export default function App() {
                       <button 
                         type="button"
                         onClick={() => addToCart(product)} 
-                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90"
+                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
                         style={{ backgroundColor: siteSettings.primary_color }}
                       >
                         <ShoppingCart className="w-4 h-4" />
@@ -720,9 +724,9 @@ export default function App() {
         </div>
       </main>
 
-      {/* 🌟 提权置顶的 CART DRAWER */}
+      {/* 🌟 提权至全屏最高层级 (z-[99999]) 的 CART DRAWER */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-[999] overflow-hidden">
+        <div className="fixed inset-0 z-[99999] overflow-hidden">
           <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800 relative z-10">
@@ -777,7 +781,7 @@ export default function App() {
 
       {/* 🌟 社交媒体引流结账弹窗 */}
       {checkoutStep && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative">
             <button onClick={() => setCheckoutStep(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
 
