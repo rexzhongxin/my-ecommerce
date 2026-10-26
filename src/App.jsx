@@ -1,16 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './supabaseClient';
-import {
-  ShoppingBag,
-  Search,
-  ShoppingCart,
-  X,
-  Plus,
-  Minus,
-  Trash2,
-  Star,
-  RefreshCw,
+import { 
+  ShoppingBag, 
+  Search, 
+  ShoppingCart, 
+  X, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  Star, 
+  RefreshCw, 
   SlidersHorizontal,
   Sparkles,
   Package,
@@ -38,11 +38,6 @@ const WHATSAPP_NUMBER = '60123456789';
 const INSTAGRAM_USERNAME = 'p0larize.me';
 
 export default function App() {
-  // WARNING: This hostname check is NOT real security. It only hides the
-  // admin button on non-admin deployments. Real protection still requires
-  // Supabase Auth plus Row Level Security: public read-only access for
-  // active products and settings, and writes only for an authenticated admin.
-  // Do not rely on a hostname check or any URL parameter to protect admin actions.
   const isAdminEnvironment = useMemo(() => {
     const hostname = window.location.hostname;
     return hostname.includes('admin');
@@ -201,7 +196,8 @@ export default function App() {
 
   const updateQuantity = (id, delta) => {
     setCart(prevCart => prevCart.map(item => {
-      if (String(item.id) === String(id)) {
+      const isTarget = item.id ? String(item.id) === String(id) : item.name === id;
+      if (isTarget) {
         const newQty = item.quantity + delta;
         return newQty > 0 ? { ...item, quantity: newQty } : item;
       }
@@ -210,18 +206,16 @@ export default function App() {
   };
 
   const removeFromCart = (id) => {
-    setCart(prevCart => prevCart.filter(item => String(item.id) !== String(id)));
+    setCart(prevCart => prevCart.filter(item => item.id ? String(item.id) !== String(id) : item.name !== id));
     showToast('Item removed from cart.');
   };
 
-  // 🌟 关键修复：下单成功后自动更新 Supabase 中商品的 sales_count
+  // 🌟 修复核心：已售出数量 (sales_count) 自动累加逻辑
   const handleOrderSubmit = async (e) => {
     e.preventDefault();
     setCheckoutStep('processing');
 
     // 1. 保存订单数据
-    // Note: no new phone column is added here (schema unknown). Phone, city
-    // and zip are appended to the address string saved below.
     const { data, error } = await supabase.from('orders').insert([{
       customer_name: shippingInfo.fullName,
       email: shippingInfo.email,
@@ -233,32 +227,47 @@ export default function App() {
 
     if (!error && data && data.length > 0) {
       setLastPlacedOrderId(data[0].id);
-      // Snapshot the order total and items BEFORE clearing the cart, so the
-      // WhatsApp message and success screen do not show RM 0.00.
       setLastOrderTotal(cartTotal);
       setLastOrderSummary(cart.map(cartItem => `${cartItem.name} x${cartItem.quantity} - RM ${((parseFloat(cartItem.price) || 0) * cartItem.quantity).toFixed(2)}`).join('; '));
 
-      // 2. 🌟 遍历购物车，更新对应商品的 sales_count
+      // 2. 🌟 遍历购物车，更新销量（双重匹配机制：支持按 ID 或按商品名称更新）
       for (const cartItem of cart) {
-        if (cartItem.id) {
-          // 查询当前商品的最新销量
-          const { data: currentProduct } = await supabase
-            .from('products')
-            .select('sales_count')
-            .eq('id', cartItem.id)
-            .single();
+        try {
+          if (cartItem.id) {
+            // 查出目前最新的 sales_count
+            const { data: prodData } = await supabase
+              .from('products')
+              .select('sales_count')
+              .eq('id', cartItem.id)
+              .maybeSingle();
 
-          const currentSales = currentProduct?.sales_count || 0;
+            const currentSales = prodData?.sales_count || 0;
 
-          // 在原有销量基础上累加本次购买数量
-          await supabase
-            .from('products')
-            .update({ sales_count: currentSales + cartItem.quantity })
-            .eq('id', cartItem.id);
+            await supabase
+              .from('products')
+              .update({ sales_count: currentSales + cartItem.quantity })
+              .eq('id', cartItem.id);
+          } else if (cartItem.name) {
+            // 如果没有 ID，则降级按名称精准匹配更新
+            const { data: prodData } = await supabase
+              .from('products')
+              .select('sales_count')
+              .eq('name', cartItem.name)
+              .maybeSingle();
+
+            const currentSales = prodData?.sales_count || 0;
+
+            await supabase
+              .from('products')
+              .update({ sales_count: currentSales + cartItem.quantity })
+              .eq('name', cartItem.name);
+          }
+        } catch (err) {
+          console.error("更新销量失败:", err);
         }
       }
 
-      // 3. 重新获取最新的商品数据（更新前端页面显示）
+      // 3. 重新获取最新的商品数据，前台页面实时呈现新销量
       await fetchProducts();
 
       setCheckoutStep('success');
@@ -293,9 +302,6 @@ export default function App() {
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
 
-  // Visible categories are derived from products that actually exist, so an
-  // empty category is not advertised. While loading, fall back to the full
-  // list so the UI does not flicker empty.
   const visibleCategories = useMemo(() => {
     if (loading) return CATEGORIES;
     const activeCategories = new Set(products.filter(p => p.is_active !== false).map(p => p.category));
@@ -445,7 +451,7 @@ export default function App() {
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto pr-2">
                   {products.map(p => (
-                    <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                    <div key={p.id || p.name} className="py-3 flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-3">
                         <img src={p.image} alt="" className="w-12 h-12 object-cover rounded-lg border" />
                         <div>
@@ -471,9 +477,9 @@ export default function App() {
                 <div className="space-y-3 max-h-[300px] overflow-y-auto">
                   {orders.length === 0 ? (<p className="text-xs text-slate-400 text-center py-6">暂无订单数据。</p>) : (
                     orders.map(o => (
-                      <div key={o.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                      <div key={o.id || o.created_at} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
                         <div className="flex justify-between font-bold text-slate-800">
-                          <span>订单号: #{o.id}</span>
+                          <span>订单号: #{o.id || 'N/A'}</span>
                           <span className="text-indigo-600">RM {o.total_price?.toFixed(2)}</span>
                         </div>
                         <p><span className="text-slate-500">顾客:</span> {o.customer_name} ({o.email})</p>
@@ -490,335 +496,333 @@ export default function App() {
     );
   }
 
-// ==================== 前台网店界面 (Public Store View) ====================
-return (
-<div
-className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
-style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color}}
->
+  // ==================== 前台网店界面 (Public Store View) ====================
+  return (
+    <div 
+      className="min-h-screen font-sans antialiased flex flex-col transition-colors duration-300 relative"
+      style={{ backgroundColor: siteSettings.bg_color, color: siteSettings.text_color }}
+    >
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all animate-bounce">
+          <Sparkles className="w-5 h-5 text-indigo-400" />
+          <span className="text-sm font-medium">{toastMessage}</span>
+        </div>
+      )}
 
-{/* Toast Notification */}
-{toastMessage && (
-<div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 transition-all animate-bounce">
-<Sparkles className="w-5 h-5 text-indigo-400" />
-<span className="text-sm font-medium">{toastMessage}</span>
-</div>
-)}
+      {/* 页面右下角全局悬浮购物车 */}
+      <button
+        type="button"
+        onClick={openCartDrawer}
+        className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all cursor-pointer"
+      >
+        <ShoppingCart className="w-6 h-6 text-indigo-400" />
+        <span className="text-xs font-bold">View Cart ({totalCartItemsCount})</span>
+      </button>
 
-{/* 页面右下角全局 */}
-<button
-type="button"
-onClick={openCartDrawer}
-className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white p-4 rounded-full shadow-2xl flex items-center space-x-2 border-2 border-indigo-500 hover:scale-105 transition-all cursor-pointer"
->
-<ShoppingCart className="w-6 h-6 text-indigo-400" />
-<span className="text-xs font-bold">View Cart ({totalCartItemsCount})</span>
-</button>
+      {/* Admin 专属前台“实时调色”悬浮卡片 */}
+      {isAdminEnvironment && (
+        <div className="fixed bottom-24 right-6 z-50">
+          {!showColorPicker ? (
+            <button
+              onClick={() => setShowColorPicker(true)}
+              className="flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs hover:bg-slate-800 border border-slate-700 transition-all hover:scale-105"
+            >
+              <Palette className="w-4 h-4 text-indigo-400" />
+              <span>实时调色板</span>
+            </button>
+          ) : (
+            <div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-slate-200 w-72 text-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between border-b pb-2">
+                <span className="text-xs font-bold flex items-center gap-1 text-indigo-600">
+                  <Palette className="w-4 h-4" /> 实时前台调色
+                </span>
+                <button onClick={() => setShowColorPicker(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-{/* Admin 专属前台“实时调色”悬浮卡片 */}
-{isAdminEnvironment && (
-<div className="fixed bottom-24 right-6 z-50">
-{!showColorPicker? (
-<button
-onClick={() => setShowColorPicker(true)}
-className="flex items-center space-x-2 bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs hover:bg-slate-800 border border-slate-700 transition-all hover:scale-105"
->
-<Palette className="w-4 h-4 text-indigo-400" />
-<span>实时调色板</span>
-</button>
-): (
-<div className="bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-slate-200 w-72 text-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
-<div className="flex items-center justify-between border-b pb-2">
-<span className="text-xs font-bold flex items-center gap-1 text-indigo-600">
-<Palette className="w-4 h-4" /> 实时前台调色
-</span>
-<button onClick={() => setShowColorPicker(false)} className="text-slate-400 hover:text-slate-600">
-<X className="w-4 h-4" />
-</button>
-</div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">主色调 (Primary)</label>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="color" 
+                      value={siteSettings.primary_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, primary_color: e.target.value })}
+                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <input 
+                      type="text" 
+                      value={siteSettings.primary_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, primary_color: e.target.value })}
+                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+                    />
+                  </div>
+                </div>
 
-<div className="space-y-3">
-<div>
-<label className="block text-[11px] font-bold text-slate-600 mb-1">主色调 (Primary)</label>
-<div className="flex items-center space-x-2">
-<input
-type="color"
-value={siteSettings.primary_color}
-onChange={e => setSiteSettings({...siteSettings, primary_color: e.target.value})}
-className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-/>
-<input
-type="text"
-value={siteSettings.primary_color}
-onChange={e => setSiteSettings({...siteSettings, primary_color: e.target.value})}
-className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-/>
-</div>
-</div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">文字颜色 (Text)</label>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="color" 
+                      value={siteSettings.text_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, text_color: e.target.value })}
+                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <input 
+                      type="text" 
+                      value={siteSettings.text_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, text_color: e.target.value })}
+                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+                    />
+                  </div>
+                </div>
 
-<div>
-<label className="block text-[11px] font-bold text-slate-600 mb-1">文字颜色 (Text)</label>
-<div className="flex items-center space-x-2">
-<input
-type="color"
-value={siteSettings.text_color}
-onChange={e => setSiteSettings({...siteSettings, text_color: e.target.value})}
-className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-/>
-<input
-type="text"
-value={siteSettings.text_color}
-onChange={e => setSiteSettings({...siteSettings, text_color: e.target.value})}
-className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-/>
-</div>
-</div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">网页背景色 (Background)</label>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="color" 
+                      value={siteSettings.bg_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, bg_color: e.target.value })}
+                      className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+                    />
+                    <input 
+                      type="text" 
+                      value={siteSettings.bg_color}
+                      onChange={e => setSiteSettings({ ...siteSettings, bg_color: e.target.value })}
+                      className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
+                    />
+                  </div>
+                </div>
+              </div>
 
-<div>
-<label className="block text-[11px] font-bold text-slate-600 mb-1">网页背景色 (Background)</label>
-<div className="flex items-center space-x-2">
-<input
-type="color"
-value={siteSettings.bg_color}
-onChange={e => setSiteSettings({...siteSettings, bg_color: e.target.value})}
-className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
-/>
-<input
-type="text"
-value={siteSettings.bg_color}
-onChange={e => setSiteSettings({...siteSettings, bg_color: e.target.value})}
-className="text-xs px-2 py-1 bg-slate-100 rounded border border-slate-200 flex-1 uppercase"
-/>
-</div>
-</div>
-</div>
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-1"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{savingSettings ? '保存中...' : '保存全新配色'}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-<button
-onClick={handleSaveSettings}
-disabled={savingSettings}
-className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-1"
->
-<Save className="w-3.5 h-3.5" />
-<span>{savingSettings? '保存中...': '保存全新配色'}</span>
-</button>
-</div>
-)}
-</div>
-)}
+      {/* --- NAVBAR --- */}
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            
+            {/* Logo */}
+            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
+              {siteSettings.store_logo ? (
+                <img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
+              ) : (
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: siteSettings.primary_color }}>
+                  <ShoppingBag className="w-6 h-6 text-white" />
+                </div>
+              )}
+              <span className="text-2xl font-bold tracking-tight" style={{ color: siteSettings.primary_color }}>
+                {siteSettings.store_name}
+              </span>
+            </div>
 
-{/* --- NAVBAR --- */}
-<header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200">
-<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-<div className="flex items-center justify-between h-20">
+            {/* Search Bar */}
+            <div className="hidden md:flex flex-1 max-w-md mx-8 relative">
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
+              />
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+            </div>
 
-{/* Logo */}
-<div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setSelectedCategory('all'); setSearchQuery('');}}>
-{siteSettings.store_logo? (
-<img src={siteSettings.store_logo} alt="Logo" className="w-10 h-10 object-contain rounded-xl shadow-md" />
-): (
-<div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: siteSettings.primary_color}}>
-<ShoppingBag className="w-6 h-6 text-white" />
-</div>
-)}
-<span className="text-2xl font-bold tracking-tight" style={{ color: siteSettings.primary_color}}>
-{siteSettings.store_name}
-</span>
-</div>
+            {/* Actions */}
+            <div className="flex items-center space-x-3">
+              {isAdminEnvironment && (
+                <button
+                  type="button"
+                  onClick={() => { setIsAdmin(true); fetchOrders(); }}
+                  className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>商家后台</span>
+                </button>
+              )}
 
-{/* Search Bar */}
-<div className="hidden md:flex flex-1 max-w-md mx-8 relative">
-<input
-type="text"
-placeholder="Search products..."
-value={searchQuery}
-onChange={(e) => setSearchQuery(e.target.value)}
-className="w-full pl-11 pr-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-full focus:outline-none text-sm text-slate-800"
-/>
-<Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
-</div>
+              {/* Header Cart 按钮 */}
+              <button
+                type="button"
+                onClick={openCartDrawer}
+                className="flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer"
+                style={{ backgroundColor: siteSettings.primary_color }}
+              >
+                <ShoppingCart className="w-4 h-4 pointer-events-none" />
+                <span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
+                {totalCartItemsCount > 0 && (
+                  <span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color }}>
+                    {totalCartItemsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-{/* Actions */}
-<div className="flex items-center space-x-3">
-{isAdminEnvironment && (
-<button
-type="button"
-onClick={() => { setIsAdmin(true); fetchOrders();}}
-className="flex items-center space-x-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-xs font-bold transition-all shadow-sm"
->
-<LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-<span>商家后台</span>
-</button>
-)}
+      {/* --- HERO BANNER --- */}
+      <section 
+        className="text-white relative overflow-hidden transition-all duration-300"
+        style={{ 
+          background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)` 
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
+          <div className="max-w-xl text-center md:text-left">
+            <span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Cloud Database Powered</span>
+            </span>
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
+              {siteSettings.hero_title}
+            </h1>
+            <p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
+              {siteSettings.hero_subtitle}
+            </p>
+          </div>
+        </div>
+      </section>
 
-{/* Header Cart 按钮 */}
-<button
-type="button"
-onClick={openCartDrawer}
-className="flex items-center space-x-2 text-white px-4 py-2 rounded-full shadow-md transition-all hover:opacity-90 cursor-pointer"
-style={{ backgroundColor: siteSettings.primary_color}}
->
-<ShoppingCart className="w-4 h-4 pointer-events-none" />
-<span className="font-semibold text-sm hidden sm:inline pointer-events-none">Cart</span>
-{totalCartItemsCount > 0 && (
-<span className="bg-white font-bold text-xs px-2 py-0.5 rounded-full pointer-events-none" style={{ color: siteSettings.primary_color}}>
-{totalCartItemsCount}
-</span>
-)}
-</button>
-</div>
-</div>
-</div>
-</header>
+      {/* --- MAIN CATALOG --- */}
+      <main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
+          <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+            {visibleCategories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  selectedCategory === cat.id
+                    ? 'text-white shadow-md'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+                style={{ backgroundColor: selectedCategory === cat.id ? siteSettings.primary_color : undefined }}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
 
-{/* --- HERO BANNER --- */}
-<section
-className="text-white relative overflow-hidden transition-all duration-300"
-style={{
-background: `linear-gradient(135deg, ${siteSettings.primary_color} 0%, #0f172a 100%)`
-}}
->
-<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20 relative z-10 flex flex-col md:flex-row items-center justify-between">
-<div className="max-w-xl text-center md:text-left">
-<span className="inline-flex items-center space-x-2 bg-white/10 text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/20 mb-4">
-<Sparkles className="w-3.5 h-3.5" />
-<span>Cloud Database Powered</span>
-</span>
-<h1 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-{siteSettings.hero_title}
-</h1>
-<p className="mt-4 text-slate-200 text-base md:text-lg leading-relaxed">
-{siteSettings.hero_subtitle}
-</p>
-</div>
-</div>
-</section>
+          <div className="flex items-center space-x-3 self-end md:self-auto">
+            <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
+            >
+              <option value="featured">Featured</option>
+              <option value="popular">Most Popular</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="rating">Highest Rated</option>
+            </select>
+          </div>
+        </div>
 
-{/* --- MAIN CATALOG --- */}
-<main id="shop" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow w-full">
-<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200/80">
-<div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-{visibleCategories.map(cat => (
-<button
-key={cat.id}
-onClick={() => setSelectedCategory(cat.id)}
-className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-selectedCategory === cat.id
-? 'text-white shadow-md'
-: 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-}`}
-style={{ backgroundColor: selectedCategory === cat.id? siteSettings.primary_color: undefined}}
->
-{cat.name}
-</button>
-))}
-</div>
+        {/* Product Grid */}
+        <div className="mt-8">
+          {loading ? (
+            <div className="text-center py-20">
+              <RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color }} />
+              <p className="text-sm opacity-70 font-medium">Loading products...</p>
+            </div>
+          ) : displayedProducts.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+              <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-slate-700">No active products found</h3>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+              {displayedProducts.map((item) => (
+                <div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
+                  <div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(item)}>
+                    <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    
+                    {(item.sales_count > 50) && (
+                      <div className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center space-x-1">
+                        <TrendingUp className="w-3 h-3" />
+                        <span>HOT</span>
+                      </div>
+                    )}
+                  </div>
 
-<div className="flex items-center space-x-3 self-end md:self-auto">
-<SlidersHorizontal className="w-4 h-4 text-slate-500" />
-<select
-value={sortBy}
-onChange={(e) => setSortBy(e.target.value)}
-className="bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 text-slate-700 font-medium cursor-pointer shadow-sm focus:outline-none"
->
-<option value="featured">Featured</option>
-<option value="popular">Most Popular</option>
-<option value="price-low">Price: Low to High</option>
-<option value="price-high">Price: High to Low</option>
-<option value="rating">Highest Rated</option>
-</select>
-</div>
-</div>
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        {item.reviews > 0 ? (
+                          <div className="flex items-center space-x-1 text-amber-400 font-semibold">
+                            <Star className="w-4 h-4 fill-amber-400" />
+                            <span>{item.rating}</span>
+                            <span className="text-slate-400">({item.reviews})</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">No reviews yet</span>
+                        )}
 
-{/* Product Grid */}
-<div className="mt-8">
-{loading? (
-<div className="text-center py-20">
-<RefreshCw className="w-10 h-10 animate-spin mx-auto mb-3" style={{ color: siteSettings.primary_color}} />
-<p className="text-sm opacity-70 font-medium">Loading products...</p>
-</div>
-): displayedProducts.length === 0? (
-<div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
-<Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-<h3 className="text-lg font-bold text-slate-700">No active products found</h3>
-</div>
-): (
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-{displayedProducts.map((item) => (
-<div key={item.id || item.name} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group relative">
-<div className="relative h-56 bg-slate-100 overflow-hidden cursor-pointer" onClick={() => setSelectedProduct(item)}>
-<img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
+                          {item.sales_count || 0} sold
+                        </span>
+                      </div>
 
-{/* 热销 Badge 挂牌 */}
-{(item.sales_count > 50) && (
-<div className="absolute top-3 left-3 bg-rose-500 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md flex items-center space-x-1">
-<TrendingUp className="w-3 h-3" />
-<span>HOT</span>
-</div>
-)}
-</div>
+                      <h3 
+                        onClick={() => setSelectedProduct(item)} 
+                        className="mt-1 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
+                        style={{ color: siteSettings.text_color }}
+                      >
+                        {item.name}
+                      </h3>
+                      <p 
+                        className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
+                        style={{ color: siteSettings.text_color }}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
 
-<div className="p-5 flex-1 flex flex-col justify-between">
-<div>
-<div className="flex items-center justify-between text-xs mb-1">
-{item.reviews > 0? (
-<div className="flex items-center space-x-1 text-amber-400 font-semibold">
-<Star className="w-4 h-4 fill-amber-400" />
-<span>{item.rating}</span>
-<span className="text-slate-400">({item.reviews})</span>
-</div>
-): (
-<span className="text-slate-400">No reviews yet</span>
-)}
+                    <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
+                      <span 
+                        className="text-lg font-bold"
+                        style={{ color: siteSettings.text_color }}
+                      >
+                        RM {parseFloat(item.price).toFixed(2)}
+                      </span>
 
-{/* 显示销量 */}
-<span className="text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full text-[11px]">
-{item.sales_count || 0} sold
-</span>
-</div>
-
-<h3
-onClick={() => setSelectedProduct(item)}
-className="mt-1 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
-style={{ color: siteSettings.text_color}}
->
-{item.name}
-</h3>
-<p
-className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
-style={{ color: siteSettings.text_color}}
->
-{item.description}
-</p>
-</div>
-
-<div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
-<span
-className="text-lg font-bold"
-style={{ color: siteSettings.text_color}}
->
-RM {parseFloat(item.price).toFixed(2)}
-</span>
-
-<button
-type="button"
-aria-label={`Add ${item.name} to cart`}
-onClick={(e) => {
-e.stopPropagation();
-addToCart(item);
-}}
-className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
-style={{ backgroundColor: siteSettings.primary_color}}
->
-<ShoppingCart className="w-4 h-4" />
-</button>
-</div>
-</div>
-</div>
-))}
-</div>
-)}
-</div>
-</main>
+                      <button 
+                        type="button"
+                        aria-label={`Add ${item.name} to cart`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(item);
+                        }} 
+                        className="p-2.5 text-white rounded-xl shadow-md transition-all hover:opacity-90 cursor-pointer"
+                        style={{ backgroundColor: siteSettings.primary_color }}
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
 
       {/* --- FOOTER --- */}
       <footer className="bg-white border-t border-slate-200">
@@ -886,12 +890,12 @@ style={{ backgroundColor: siteSettings.primary_color}}
                       <h4 className="text-sm font-semibold break-words">{item.name}</h4>
                       <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>RM {Number(item.price).toFixed(2)}</p>
                       <div className="flex items-center space-x-3 mt-2">
-                        <button type="button" aria-label={`Decrease ${item.name} quantity`} onClick={() => updateQuantity(item.id, -1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><Minus className="w-3 h-3" /></button>
+                        <button type="button" aria-label={`Decrease ${item.name} quantity`} onClick={() => updateQuantity(item.id || item.name, -1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><Minus className="w-3 h-3" /></button>
                         <span className="text-xs font-bold">{item.quantity}</span>
-                        <button type="button" aria-label={`Increase ${item.name} quantity`} onClick={() => updateQuantity(item.id, 1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><Plus className="w-3 h-3" /></button>
+                        <button type="button" aria-label={`Increase ${item.name} quantity`} onClick={() => updateQuantity(item.id || item.name, 1)} className="p-1.5 bg-slate-100 rounded hover:bg-slate-200"><Plus className="w-3 h-3" /></button>
                       </div>
                     </div>
-                    <button type="button" aria-label={`Remove ${item.name}`} onClick={() => removeFromCart(item.id)} className="p-2 text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                    <button type="button" aria-label={`Remove ${item.name}`} onClick={() => removeFromCart(item.id || item.name)} className="p-2 text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 ))
               )}
@@ -930,7 +934,7 @@ style={{ backgroundColor: siteSettings.primary_color}}
         document.body
       )}
 
-      {/* Product detail modal: previously selectedProduct was set but never rendered */}
+      {/* Product detail modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
