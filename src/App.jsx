@@ -20,7 +20,9 @@ import {
   ToggleRight,
   Settings,
   Save,
-  Palette
+  Palette,
+  MessageCircle,
+  Instagram
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -30,6 +32,10 @@ const CATEGORIES = [
   { id: 'Accessories', name: 'Accessories' },
   { id: 'Lifestyle', name: 'Lifestyle' }
 ];
+
+// 💡 在这里填写你的真实的 WhatsApp 电话号码（带国家代码，不要有加号或空格，例如马来西亚 60123456789）和 Instagram 用户名
+const WHATSAPP_NUMBER = '60123456789';
+const INSTAGRAM_USERNAME = 'p0larize.me';
 
 export default function App() {
   const isAdminEnvironment = useMemo(() => {
@@ -64,6 +70,7 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [checkoutStep, setCheckoutStep] = useState(null);
+  const [lastPlacedOrderId, setLastPlacedOrderId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
   const [newProduct, setNewProduct] = useState({
@@ -71,7 +78,6 @@ export default function App() {
   });
 
   const [shippingInfo, setShippingInfo] = useState({ fullName: '', email: '', address: '', city: '', zipCode: '' });
-  const [paymentInfo, setPaymentInfo] = useState({ cardNumber: '', cardName: '', expiry: '', cvv: '' });
 
   useEffect(() => {
     fetchProducts();
@@ -189,24 +195,26 @@ export default function App() {
     showToast('Item removed from cart.');
   };
 
-  const handlePaymentSubmit = async (e) => {
+  // 🌟 提交订单并存入数据库，然后引导用户跳转社交媒体联系卖家
+  const handleOrderSubmit = async (e) => {
     e.preventDefault();
     setCheckoutStep('processing');
 
-    const { error } = await supabase.from('orders').insert([{
+    const { data, error } = await supabase.from('orders').insert([{
       customer_name: shippingInfo.fullName,
       email: shippingInfo.email,
       address: `${shippingInfo.address}, ${shippingInfo.city}, ${shippingInfo.zipCode}`,
       total_price: cartTotal,
       items: JSON.stringify(cart),
       status: 'pending'
-    }]);
+    }]).select();
 
-    if (!error) {
+    if (!error && data && data.length > 0) {
+      setLastPlacedOrderId(data[0].id);
       setCheckoutStep('success');
       setCart([]);
     } else {
-      showToast('订单提交失败：' + error.message);
+      showToast('提交失败：' + (error ? error.message : '未知错误'));
       setCheckoutStep(null);
     }
   };
@@ -233,6 +241,12 @@ export default function App() {
         return (a.id || 0) - (b.id || 0);
       });
   }, [products, selectedCategory, searchQuery, sortBy]);
+
+  // 生成 WhatsApp 动态预填信息链接
+  const whatsappUrl = useMemo(() => {
+    const text = `Hi! 我想订购 ${siteSettings.store_name} 的商品。%0A订单号: #${lastPlacedOrderId || 'NEW'}%0A姓名: ${shippingInfo.fullName}%0A地址: ${shippingInfo.address}%0A预估金额: $${cartTotal.toFixed(2)}`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
+  }, [siteSettings.store_name, lastPlacedOrderId, shippingInfo, cartTotal]);
 
   // ==================== 商家管理后台界面 (Admin Backstage) ====================
   if (isAdmin) {
@@ -383,7 +397,7 @@ export default function App() {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-indigo-600" /> 顾客订单中心 ({orders.length})
+                    <ShoppingBag className="w-5 h-5 text-indigo-600" /> 顾客意向订单中心 ({orders.length})
                   </h2>
                   <button onClick={fetchOrders} className="text-xs text-indigo-600 hover:underline flex items-center gap-1"><RefreshCw className="w-3 h-3" /> 重新加载订单</button>
                 </div>
@@ -576,7 +590,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* --- HERO BANNER (已绑定主色调动态渐变) --- */}
+      {/* --- HERO BANNER --- */}
       <section 
         className="text-white relative overflow-hidden transition-all duration-300"
         style={{ 
@@ -660,8 +674,6 @@ export default function App() {
                         <span>{product.rating || 5.0}</span>
                         <span className="text-slate-400">({product.reviews || 0})</span>
                       </div>
-                      
-                      {/* 🌟 绑定文字颜色设置 */}
                       <h3 
                         onClick={() => setSelectedProduct(product)} 
                         className="mt-2 text-base font-bold cursor-pointer line-clamp-1 transition-colors"
@@ -669,8 +681,6 @@ export default function App() {
                       >
                         {product.name}
                       </h3>
-                      
-                      {/* 🌟 描述文本响应文字颜色设置 */}
                       <p 
                         className="mt-1 text-xs line-clamp-2 leading-relaxed opacity-75"
                         style={{ color: siteSettings.text_color }}
@@ -680,7 +690,6 @@ export default function App() {
                     </div>
 
                     <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100">
-                      {/* 🌟 价格数字响应文字颜色设置 */}
                       <span 
                         className="text-lg font-bold"
                         style={{ color: siteSettings.text_color }}
@@ -703,6 +712,140 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* --- CART DRAWER --- */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div onClick={() => setIsCartOpen(false)} className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <h2 className="text-lg font-bold text-slate-900">Your Shopping Cart</h2>
+                <button onClick={() => setIsCartOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 divide-y divide-slate-100">
+                {cart.length === 0 ? (
+                  <p className="text-center py-16 text-slate-500">Your cart is empty</p>
+                ) : (
+                  cart.map(item => (
+                    <div key={item.id} className="py-4 flex items-center space-x-4">
+                      <img src={item.image} alt="" className="w-16 h-16 object-cover rounded-xl" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold">{item.name}</h4>
+                        <p className="text-xs font-bold" style={{ color: siteSettings.primary_color }}>${item.price}</p>
+                        <div className="flex items-center space-x-2 mt-2">
+                          <button onClick={() => updateQuantity(item.id, -1)} className="p-1 bg-slate-100 rounded"><Minus className="w-3 h-3" /></button>
+                          <span className="text-xs font-bold">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.id, 1)} className="p-1 bg-slate-100 rounded"><Plus className="w-3 h-3" /></button>
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <div className="p-6 border-t bg-slate-50 space-y-3">
+                  <div className="flex justify-between font-bold text-slate-900">
+                    <span>Total</span>
+                    <span>${cartTotal.toFixed(2)}</span>
+                  </div>
+                  <button
+                    onClick={() => { setIsCartOpen(false); setCheckoutStep('shipping'); }}
+                    className="w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:opacity-90"
+                    style={{ backgroundColor: siteSettings.primary_color }}
+                  >
+                    Proceed to Order
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟🌟🌟 重新设计的“直接引流至社交媒体/通讯软件”结账弹窗 🌟🌟🌟 */}
+      {checkoutStep && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm text-slate-800">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative">
+            <button onClick={() => setCheckoutStep(null)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+
+            {/* 填写配送与联系信息 */}
+            {checkoutStep === 'shipping' && (
+              <form onSubmit={handleOrderSubmit} className="space-y-4">
+                <h2 className="text-xl font-bold">订购与送货资料</h2>
+                <p className="text-xs text-slate-500">填写您的送货资料后，系统将为您生成订单链接直接联系卖家确认。</p>
+                <input required placeholder="您的姓名 (Full Name)" value={shippingInfo.fullName} onChange={e => setShippingInfo({...shippingInfo, fullName: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                <input required placeholder="电邮地址 (Email)" type="email" value={shippingInfo.email} onChange={e => setShippingInfo({...shippingInfo, email: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                <input required placeholder="收货地址 (Street Address)" value={shippingInfo.address} onChange={e => setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <input required placeholder="城市 (City)" value={shippingInfo.city} onChange={e => setShippingInfo({...shippingInfo, city: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                  <input required placeholder="邮编 (Zip)" value={shippingInfo.zipCode} onChange={e => setShippingInfo({...shippingInfo, zipCode: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" />
+                </div>
+
+                <button type="submit" className="w-full text-white font-bold py-3.5 rounded-xl transition-all hover:opacity-90 shadow-md" style={{ backgroundColor: siteSettings.primary_color }}>
+                  确认提交订单并联系卖家
+                </button>
+              </form>
+            )}
+
+            {/* 提交中动画 */}
+            {checkoutStep === 'processing' && (
+              <div className="text-center py-12 space-y-3">
+                <RefreshCw className="w-10 h-10 animate-spin mx-auto" style={{ color: siteSettings.primary_color }} />
+                <p className="font-bold">正在保存意向订单信息...</p>
+              </div>
+            )}
+
+            {/* 🌟🌟🌟 按要求修改后的提示及社交媒体/WhatsApp 跳转链接 🌟🌟🌟 */}
+            {checkoutStep === 'success' && (
+              <div className="text-center py-6 space-y-5">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+                
+                <div className="space-y-2">
+                  <h2 className="text-xl font-extrabold text-slate-900">如需订购，请点击以下链接联系卖家 (WhatsApp / Instagram DM)</h2>
+                  <p className="text-xs text-slate-500">
+                    您的意向订单编号为 <span className="font-bold text-slate-800">#{lastPlacedOrderId}</span>，点击下方按钮将直接带您跳转至对应的聊天界面完成购买！
+                  </p>
+                </div>
+
+                {/* 跳转接单按钮组 */}
+                <div className="space-y-3 pt-2">
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all"
+                  >
+                    <MessageCircle className="w-5 h-5 fill-white" />
+                    <span>通过 WhatsApp 直接发送订单</span>
+                  </a>
+
+                  <a
+                    href={`https://instagram.com/${INSTAGRAM_USERNAME}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all"
+                  >
+                    <Instagram className="w-5 h-5" />
+                    <span>通过 Instagram 私信 (DM) 联系</span>
+                  </a>
+                </div>
+
+                <button 
+                  onClick={() => setCheckoutStep(null)} 
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl text-xs transition-all mt-3"
+                >
+                  继续浏览网店
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
